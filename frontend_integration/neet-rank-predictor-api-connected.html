@@ -32252,7 +32252,7 @@ setupDropzone();
    development against `docker compose up` / `uvicorn`, the
    default below (localhost:8000) already works.
    ============================================================ */
-const PREDICTOR_API_BASE_URL = (window.PREDICTOR_API_BASE_URL || "http://localhost:8000/api/v1");
+const PREDICTOR_API_BASE_URL = (window.PREDICTOR_API_BASE_URL || "https://neet-rank-predictor-backend-production.up.railway.app/api/v1");
 
 async function apiGet(path) {
   const res = await fetch(PREDICTOR_API_BASE_URL + path);
