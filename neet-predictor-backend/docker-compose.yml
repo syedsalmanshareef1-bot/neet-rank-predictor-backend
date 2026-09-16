@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: neet_user
+      POSTGRES_PASSWORD: neet_password
+      POSTGRES_DB: neet_predictor
+    volumes:
+      - neet_pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neet_user -d neet_predictor"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://neet_user:neet_password@db:5432/neet_predictor
+    ports:
+      - "8000:8000"
+    # Migrations + server start now live in the Dockerfile's CMD, so this
+    # works the same locally and on platforms like Railway that inject $PORT.
+
+volumes:
+  neet_pg_data:

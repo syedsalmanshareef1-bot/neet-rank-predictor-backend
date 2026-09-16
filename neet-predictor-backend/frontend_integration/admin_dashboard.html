@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEET Predictor — Admin Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'IBM Plex Sans', system-ui, sans-serif; background: #F6F5F1; color: #14213D; margin: 0; padding: 32px 24px 80px; }
+  .serif { font-family: 'Source Serif 4', serif; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .subtitle { color: #5C5A50; font-size: 14px; margin: 0 0 28px; }
+  .card { background: #fff; border: 1.5px solid #D8D4C8; border-radius: 10px; padding: 22px 24px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; margin: 0 0 14px; }
+  label { display: block; font-size: 12.5px; font-weight: 600; color: #5C5A50; margin: 12px 0 5px; }
+  input, select { width: 100%; border: 1.5px solid #D8D4C8; border-radius: 6px; padding: 9px 11px; font-size: 13.5px; font-family: inherit; background: #fff; color: #14213D; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .btn { background: #14213D; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; margin-top: 16px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-outline { background: #fff; border: 1.5px solid #14213D; color: #14213D; }
+  .btn-teal { background: #0D7377; }
+  .btn-small { padding: 6px 12px; font-size: 12px; margin-top: 0; }
+  #loginPanel { max-width: 380px; margin: 60px auto; }
+  #dashboard { display: none; }
+  .status-pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .status-success { background: #E1F0E5; color: #1F6F3D; }
+  .status-partial { background: #FBEAD0; color: #9A5B0A; }
+  .status-failed { background: #FBE0DC; color: #A13D2F; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #EEEBE2; }
+  th { color: #5C5A50; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .empty { color: #8A8878; font-size: 13px; padding: 14px 0; }
+  .error-box { background: #FBE0DC; color: #A13D2F; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+  .success-box { background: #E1F0E5; color: #1F6F3D; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .logout-btn { background: none; border: none; color: #A13D2F; font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline; }
+  .help { font-size: 12px; color: #8A8878; margin-top: 6px; }
+  .conflict-row { border: 1px solid #EEDFC8; background: #FFFBF3; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; font-size: 12.5px; }
+  code { background: #F0EEE6; padding: 1px 5px; border-radius: 3px; font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="loginPanel">
+    <h1 class="serif">Admin Dashboard</h1>
+    <p class="subtitle">NEET Rank Predictor — data management</p>
+    <div class="card">
+      <label for="loginUser">Username</label>
+      <input id="loginUser" autocomplete="username">
+      <label for="loginPass">Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+      <button class="btn" style="width:100%" onclick="login()">Log in</button>
+      <div id="loginError"></div>
+    </div>
+    <p class="help">Backend: <code id="apiBaseDisplay"></code> — change via <code>?api=http://your-api-host/api/v1</code> in the URL.</p>
+  </div>
+
+  <div id="dashboard">
+    <div class="top-bar">
+      <div>
+        <h1 class="serif">Admin Dashboard</h1>
+        <p class="subtitle">Signed in as <strong id="whoAmI"></strong></p>
+      </div>
+      <button class="logout-btn" onclick="logout()">Log out</button>
+    </div>
+
+    <div class="card">
+      <h2>Upload new cutoff data</h2>
+      <p class="help" style="margin-top:-6px;margin-bottom:12px;">CSV, XLSX, or JSON. Columns: state, authority, exam, institute, course, category, quota, seat_type, gender, fee, year, round, open_rank, close_rank, source (any column you omit falls back to the defaults below).</p>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.json">
+      <div class="row">
+        <div>
+          <label for="defState">Default state</label>
+          <input id="defState" placeholder="e.g. Karnataka">
+        </div>
+        <div>
+          <label for="defAuthority">Default authority</label>
+          <input id="defAuthority" placeholder="e.g. KEA">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="defYear">Default year</label>
+          <input id="defYear" type="number" placeholder="e.g. 2026">
+        </div>
+        <div>
+          <label for="defRound">Default round</label>
+          <input id="defRound" placeholder="e.g. R1 or Final">
+        </div>
+      </div>
+      <label for="defSource">Source (for the audit log)</label>
+      <input id="defSource" placeholder="e.g. KEA official round-1 PDF, 2026">
+      <button class="btn" id="uploadBtn" onclick="uploadFile()">Upload &amp; import</button>
+      <div id="uploadResult"></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent imports</h2>
+      <div id="logsTable"><div class="empty">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Unresolved conflicts</h2>
+      <p class="help" style="margin-top:-6px;margin-bottom:12px;">A conflict means an uploaded number disagreed with a value already on file. Nothing was overwritten automatically — pick which value is correct.</p>
+      <div id="conflictsList"><div class="empty">Loading…</div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const API_BASE = params.get('api') || window.PREDICTOR_API_BASE_URL || 'http://localhost:8000/api/v1';
+document.getElementById('apiBaseDisplay').textContent = API_BASE;
+
+let token = sessionStorage.getItem('admin_token') || null;
+let username = sessionStorage.getItem('admin_username') || null;
+
+function showDashboard() {
+  document.getElementById('loginPanel').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('whoAmI').textContent = username || '';
+  loadLogs();
+  loadConflicts();
+}
+
+if (token) showDashboard();
+
+async function login() {
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.innerHTML = '';
+  if (!user || !pass) { errEl.innerHTML = '<div class="error-box">Enter a username and password.</div>'; return; }
+
+  try {
+    const res = await fetch(API_BASE + '/admin/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'username=' + encodeURIComponent(user) + '&password=' + encodeURIComponent(pass),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || ('Login failed (' + res.status + ')'));
+    }
+    const data = await res.json();
+    token = data.access_token;
+    username = user;
+    sessionStorage.setItem('admin_token', token);
+    sessionStorage.setItem('admin_username', username);
+    showDashboard();
+  } catch (err) {
+    errEl.innerHTML = '<div class="error-box">' + err.message + '</div>';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('admin_token');
+  sessionStorage.removeItem('admin_username');
+  token = null;
+  window.location.reload();
+}
+
+async function authedFetch(path, options = {}) {
+  const res = await fetch(API_BASE + path, {
+    ...options,
+    headers: { ...(options.headers || {}), Authorization: 'Bearer ' + token },
+  });
+  if (res.status === 401) { logout(); throw new Error('Session expired — please log in again.'); }
+  return res;
+}
+
+async function uploadFile() {
+  const fileEl = document.getElementById('fileInput');
+  const resultEl = document.getElementById('uploadResult');
+  const btn = document.getElementById('uploadBtn');
+  resultEl.innerHTML = '';
+
+  if (!fileEl.files[0]) { resultEl.innerHTML = '<div class="error-box">Choose a file first.</div>'; return; }
+
+  const form = new FormData();
+  form.append('file', fileEl.files[0]);
+  const state = document.getElementById('defState').value.trim();
+  const authority = document.getElementById('defAuthority').value.trim();
+  const year = document.getElementById('defYear').value.trim();
+  const round_name = document.getElementById('defRound').value.trim();
+  const source_label = document.getElementById('defSource').value.trim();
+  if (state) form.append('state', state);
+  if (authority) form.append('authority', authority);
+  if (year) form.append('year', year);
+  if (round_name) form.append('round_name', round_name);
+  if (source_label) form.append('source_label', source_label);
+
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+  try {
+    const res = await authedFetch('/admin/import', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Import failed');
+
+    resultEl.innerHTML = '<div class="success-box">' +
+      'Imported <strong>' + data.filename + '</strong> — ' +
+      data.records_added + ' new record(s), ' +
+      data.records_updated + ' updated with new rounds, ' +
+      data.duplicates_skipped + ' exact duplicate(s) skipped, ' +
+      data.conflicts_flagged + ' conflict(s) flagged' +
+      (data.rows_rejected ? ', ' + data.rows_rejected + ' row(s) rejected' : '') +
+      '. The live predictor is already serving this data.</div>';
+
+    if (data.rejected_samples && data.rejected_samples.length) {
+      resultEl.innerHTML += '<div class="help">Rejected row example: ' + data.rejected_samples[0].error + '</div>';
+    }
+    fileEl.value = '';
+    loadLogs();
+    loadConflicts();
+  } catch (err) {
+    resultEl.innerHTML = '<div class="error-box">' + err.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Upload & import';
+  }
+}
+
+function statusPillClass(status) {
+  if (status === 'success') return 'status-success';
+  if (status === 'partial') return 'status-partial';
+  return 'status-failed';
+}
+
+async function loadLogs() {
+  const el = document.getElementById('logsTable');
+  try {
+    const res = await authedFetch('/admin/import-logs?limit=20');
+    const logs = await res.json();
+    if (!logs.length) { el.innerHTML = '<div class="empty">No imports yet.</div>'; return; }
+    el.innerHTML = '<table><thead><tr><th>File</th><th>Source</th><th>Status</th><th>Added</th><th>Updated</th><th>Conflicts</th><th>By</th><th>When</th></tr></thead><tbody>' +
+      logs.map(l => '<tr>' +
+        '<td>' + l.filename + '</td>' +
+        '<td>' + (l.source_label || '—') + '</td>' +
+        '<td><span class="status-pill ' + statusPillClass(l.status) + '">' + l.status + '</span></td>' +
+        '<td>' + l.records_added + '</td>' +
+        '<td>' + l.records_updated + '</td>' +
+        '<td>' + l.conflicts_flagged + '</td>' +
+        '<td>' + l.uploaded_by + '</td>' +
+        '<td>' + new Date(l.started_at).toLocaleString() + '</td>' +
+        '</tr>').join('') + '</tbody></table>';
+  } catch (err) {
+    el.innerHTML = '<div class="error-box">' + err.message + '</div>';
+  }
+}
+
+async function loadConflicts() {
+  const el = document.getElementById('conflictsList');
+  try {
+    const res = await authedFetch('/admin/conflicts?unresolved_only=true');
+    const conflicts = await res.json();
+    if (!conflicts.length) { el.innerHTML = '<div class="empty">No unresolved conflicts. 🎉</div>'; return; }
+    el.innerHTML = conflicts.map(c => (
+      '<div class="conflict-row">' +
+        '<strong>' + c.college + '</strong> — ' + c.course + ' (' + c.category + '), round <code>' + c.round_key + '</code><br>' +
+        'On file: close ' + (c.existing_close ?? '—') + (c.existing_open != null ? (' / open ' + c.existing_open) : '') +
+        ' &nbsp;vs&nbsp; Incoming: close ' + (c.incoming_close ?? '—') + (c.incoming_open != null ? (' / open ' + c.incoming_open) : '') +
+        '<div style="margin-top:8px;">' +
+          '<button class="btn btn-outline btn-small" onclick="resolveConflict(' + c.id + ', false)">Keep existing</button> ' +
+          '<button class="btn btn-teal btn-small" onclick="resolveConflict(' + c.id + ', true)">Use incoming</button>' +
+        '</div>' +
+      '</div>'
+    )).join('');
+  } catch (err) {
+    el.innerHTML = '<div class="error-box">' + err.message + '</div>';
+  }
+}
+
+async function resolveConflict(id, useIncoming) {
+  try {
+    await authedFetch('/admin/conflicts/' + id + '/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ use_incoming: useIncoming }),
+    });
+    loadConflicts();
+    loadLogs();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+</script>
+</body>
+</html>
