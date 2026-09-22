@@ -314,29 +314,58 @@
       return;
     }
 
-    collegeEls.results.innerHTML = `<p class="state-box-inline">Loading colleges…</p>`;
+    collegeEls.results.innerHTML = `<p class="state-box-inline">Loading…</p>`;
 
     try {
-      const list = await window.NeetApi.colleges({
-        state: selectedState || undefined,
-        search: hasSearch ? term : undefined,
-        limit: 100,
-      });
-      renderCollegeResults(list, { hasSearch, hasState });
+      if (hasState) {
+        // A state is picked: pull REAL closing-rank data for every college
+        // in it via /predict with rank=1 (the best possible rank), which
+        // therefore matches every round on file for that state — this is
+        // the same live endpoint the rank predictor above uses, just fed
+        // a rank of 1 instead of the student's own rank. If a search term
+        // is also typed, it narrows those real results client-side by
+        // institute/course name — no separate name-search endpoint
+        // supports doing both at once, so this keeps everything sourced
+        // from one real API response rather than combining two calls.
+        const data = await window.NeetApi.predict({ rank: 1, filters: { state: selectedState }, limit: 500 });
+        let results = data.results || [];
+        if (hasSearch) {
+          const needle = term.toLowerCase();
+          results = results.filter(
+            (r) => (r.institute || "").toLowerCase().includes(needle) || (r.course || "").toLowerCase().includes(needle)
+          );
+        }
+        renderStateTable(results, { hasSearch });
+      } else {
+        // No state picked, just a name search: the /colleges endpoint is
+        // the only one that supports searching by name without a rank —
+        // it returns names only, no closing-rank data.
+        const list = await window.NeetApi.colleges({ search: term, limit: 100 });
+        renderNameList(list);
+      }
     } catch (err) {
       collegeEls.results.innerHTML = `
-        <p class="state-box-inline error"><strong>Couldn't load colleges.</strong><br>${escapeHtml(err.message || "Please try again.")}</p>`;
+        <p class="state-box-inline error"><strong>Couldn't load that.</strong><br>${escapeHtml(err.message || "Please try again.")}</p>`;
     }
   }
 
-  function renderCollegeResults(list, { hasSearch, hasState }) {
+  /** State selected: real closing-rank rows from /predict, one card per college+course+category. */
+  function renderStateTable(results, { hasSearch }) {
+    if (!results || results.length === 0) {
+      const context = hasSearch ? ` matching "${escapeHtml(collegeEls.search.value.trim())}"` : "";
+      collegeEls.results.innerHTML = `<p class="state-box-inline">No colleges found in ${escapeHtml(selectedState)}${context}.</p>`;
+      return;
+    }
+    const cards = results.map(renderResultCard).join("");
+    collegeEls.results.innerHTML = `
+      <p class="college-results-summary">${results.length.toLocaleString("en-IN")} college/course record${results.length === 1 ? "" : "s"} in ${escapeHtml(selectedState)}, best closing rank first</p>
+      <div class="result-grid">${cards}</div>`;
+  }
+
+  /** Name search only, no state picked: plain name list from /colleges (no rank data available here). */
+  function renderNameList(list) {
     if (!list || list.length === 0) {
-      const context = hasSearch && hasState
-        ? `matching "${escapeHtml(collegeEls.search.value.trim())}" in ${escapeHtml(selectedState)}`
-        : hasSearch
-        ? `matching "${escapeHtml(collegeEls.search.value.trim())}"`
-        : `in ${escapeHtml(selectedState)}`;
-      collegeEls.results.innerHTML = `<p class="state-box-inline">No colleges found ${context}.</p>`;
+      collegeEls.results.innerHTML = `<p class="state-box-inline">No colleges found matching "${escapeHtml(collegeEls.search.value.trim())}".</p>`;
       return;
     }
 
