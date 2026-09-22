@@ -34,19 +34,19 @@
 </head>
 <body>
 
-<a class="visually-hidden" href="#predictor">Skip to predictor</a>
+<a class="visually-hidden" href="#predictor" data-view="predictorView">Skip to predictor</a>
 
 <header>
   <div class="header-inner">
-    <a class="brand" href="#top">
+    <a class="brand" href="#top" data-view="predictorView">
       <span class="brand-mark" aria-hidden="true">+</span>
       <span class="brand-name serif">NEET Rank Predictor</span>
     </a>
     <nav class="site-nav" aria-label="Primary">
-      <a href="#predictor">Predictor</a>
-      <a href="#colleges">Colleges</a>
-      <a href="#how-it-works">How it works</a>
-      <a href="#admission-info">Admission info</a>
+      <a href="#predictor" data-view="predictorView" aria-current="page">Predictor</a>
+      <a href="#colleges" data-view="collegesView">Colleges</a>
+      <a href="#how-it-works" data-view="predictorView">How it works</a>
+      <a href="#admission-info" data-view="predictorView">Admission info</a>
     </nav>
     <span class="status-pill" id="backendStatus" data-state="checking">
       <span class="status-dot"></span>
@@ -57,6 +57,8 @@
 
 <main>
   <div class="wrap">
+
+    <div id="predictorView">
 
     <section class="hero" id="top">
       <p class="hero-eyebrow">Live, database-backed predictions</p>
@@ -124,7 +126,54 @@
 
     <section class="results-section" id="resultsSection" aria-live="polite"></section>
 
-    <section class="info-section" id="colleges" aria-labelledby="collegesHeading">
+    <section class="info-section" id="how-it-works">
+      <h2 class="serif">How this works</h2>
+      <p class="section-sub">The predictor doesn't guess — it looks up what actually happened.</p>
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>1. You enter a rank</h3>
+          <p>Optionally narrow it down by exam, state, authority, course, category or quota.</p>
+        </div>
+        <div class="info-card">
+          <h3>2. It checks real records</h3>
+          <p>Your rank is compared against historical round-wise closing ranks stored in the backend database — the same data the counselling authorities publish.</p>
+        </div>
+        <div class="info-card">
+          <h3>3. You see what cleared</h3>
+          <p>Every college and course combination your rank would have cleared is shown, closest cutoffs first, each labelled by how comfortable the margin was.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="info-section" id="admission-info">
+      <h2 class="serif">Understanding your result</h2>
+      <p class="section-sub">A quick reference for reading NEET counselling outcomes.</p>
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>Closing rank</h3>
+          <p>The rank of the last candidate admitted to a specific college, course, category and quota in a given round. Clearing it doesn't guarantee a seat next year — cutoffs move year to year.</p>
+        </div>
+        <div class="info-card">
+          <h3>Category &amp; quota</h3>
+          <p>Cutoffs differ sharply by category (General, OBC, SC, ST, EWS, PwD) and quota (All-India, State, Management, NRI). Always check results under your own category and quota, not just "General".</p>
+        </div>
+        <div class="info-card">
+          <h3>Rounds change things</h3>
+          <p>Cutoffs usually loosen in later rounds (R2, R3, mop-up) as seats vacated by upgrades and withdrawals open up. A rank that misses Round 1 may still clear a later round.</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="disclaimer">
+      Predictions are generated from historical closing-rank data and are indicative only —
+      actual cutoffs vary by year and are set solely by the official counselling authorities
+      (MCC / state authorities). This tool does not conduct counselling, allot seats, or accept
+      payments, and is not affiliated with any government body.
+    </p>
+
+    </div>
+
+    <div id="collegesView" hidden aria-labelledby="collegesHeading">
 
       <div id="collegeGridView">
         <h2 id="collegesHeading" class="serif">Browse colleges</h2>
@@ -204,53 +253,7 @@
         </div>
       </div>
 
-    </section>
-
-
-    <section class="info-section" id="how-it-works">
-      <h2 class="serif">How this works</h2>
-      <p class="section-sub">The predictor doesn't guess — it looks up what actually happened.</p>
-      <div class="info-grid">
-        <div class="info-card">
-          <h3>1. You enter a rank</h3>
-          <p>Optionally narrow it down by exam, state, authority, course, category or quota.</p>
-        </div>
-        <div class="info-card">
-          <h3>2. It checks real records</h3>
-          <p>Your rank is compared against historical round-wise closing ranks stored in the backend database — the same data the counselling authorities publish.</p>
-        </div>
-        <div class="info-card">
-          <h3>3. You see what cleared</h3>
-          <p>Every college and course combination your rank would have cleared is shown, closest cutoffs first, each labelled by how comfortable the margin was.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="info-section" id="admission-info">
-      <h2 class="serif">Understanding your result</h2>
-      <p class="section-sub">A quick reference for reading NEET counselling outcomes.</p>
-      <div class="info-grid">
-        <div class="info-card">
-          <h3>Closing rank</h3>
-          <p>The rank of the last candidate admitted to a specific college, course, category and quota in a given round. Clearing it doesn't guarantee a seat next year — cutoffs move year to year.</p>
-        </div>
-        <div class="info-card">
-          <h3>Category &amp; quota</h3>
-          <p>Cutoffs differ sharply by category (General, OBC, SC, ST, EWS, PwD) and quota (All-India, State, Management, NRI). Always check results under your own category and quota, not just "General".</p>
-        </div>
-        <div class="info-card">
-          <h3>Rounds change things</h3>
-          <p>Cutoffs usually loosen in later rounds (R2, R3, mop-up) as seats vacated by upgrades and withdrawals open up. A rank that misses Round 1 may still clear a later round.</p>
-        </div>
-      </div>
-    </section>
-
-    <p class="disclaimer">
-      Predictions are generated from historical closing-rank data and are indicative only —
-      actual cutoffs vary by year and are set solely by the official counselling authorities
-      (MCC / state authorities). This tool does not conduct counselling, allot seats, or accept
-      payments, and is not affiliated with any government body.
-    </p>
+    </div>
 
   </div>
 </main>
@@ -258,7 +261,7 @@
 <footer>
   <div class="footer-inner">
     <span>© <span id="year"></span> NEET Rank Predictor. Data updates depend on the backend's imported rounds.</span>
-    <span><a href="#top">Back to top</a></span>
+    <span><a href="#top" data-view="predictorView">Back to top</a></span>
   </div>
 </footer>
 

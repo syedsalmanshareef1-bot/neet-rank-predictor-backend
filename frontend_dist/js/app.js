@@ -587,6 +587,38 @@
       .join("");
   }
 
+  // ==================================================== view switching
+  // "Colleges" swaps to its own full view, hiding Predictor/How it
+  // works/Admission info entirely — no scrolling between them. "Predictor",
+  // "How it works" and "Admission info" all show the predictor view, then
+  // (for the latter two) scroll to their own subsection within it.
+  const predictorViewEl = document.getElementById("predictorView");
+  const collegesViewEl = document.getElementById("collegesView");
+  const navLinks = document.querySelectorAll("a[data-view]");
+
+  function showView(viewName, scrollTargetId) {
+    const showingColleges = viewName === "collegesView";
+    predictorViewEl.hidden = showingColleges;
+    collegesViewEl.hidden = !showingColleges;
+
+    navLinks.forEach((a) => {
+      if (a.dataset.view === viewName) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+
+    const target = scrollTargetId ? document.getElementById(scrollTargetId) : null;
+    (target || window).scrollTo ? (target ? target.scrollIntoView({ behavior: "smooth", block: "start" }) : window.scrollTo({ top: 0, behavior: "smooth" })) : null;
+  }
+
+  navLinks.forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const view = a.dataset.view;
+      const scrollTargetId = a.getAttribute("href").replace("#", "");
+      showView(view, view === "predictorView" ? scrollTargetId : null);
+    });
+  });
+
   // ------------------------------------------------------- boot
   checkHealth();
   loadFilterOptions().then((options) => {
