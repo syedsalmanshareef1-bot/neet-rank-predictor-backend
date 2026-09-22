@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NEET Rank Predictor — Check Your MBBS/MD College Chances by Rank</title>
+<meta name="description" content="Enter your NEET rank to see which colleges and courses it has historically cleared, drawn live from real closing-rank records — not estimates.">
+<meta name="robots" content="index,follow">
+
+<!-- Open Graph / social preview -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="NEET Rank Predictor">
+<meta property="og:description" content="See which colleges your NEET rank has historically cleared, using real closing-rank data.">
+<meta name="twitter:card" content="summary">
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230D7377'/%3E%3Cpath d='M32 16v32M16 32h32' stroke='white' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/styles.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "NEET Rank Predictor",
+  "applicationCategory": "EducationApplication",
+  "description": "Check which colleges and courses a NEET rank has historically cleared, using real closing-rank data.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" }
+}
+</script>
+</head>
+<body>
+
+<a class="visually-hidden" href="#predictor">Skip to predictor</a>
+
+<header>
+  <div class="header-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true">+</span>
+      <span class="brand-name serif">NEET Rank Predictor</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="#predictor">Predictor</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#admission-info">Admission info</a>
+    </nav>
+    <span class="status-pill" id="backendStatus" data-state="checking">
+      <span class="status-dot"></span>
+      <span id="backendStatusText">Checking data source…</span>
+    </span>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <section class="hero" id="top">
+      <p class="hero-eyebrow">Live, database-backed predictions</p>
+      <h1 class="serif">Find out what your NEET rank can get you.</h1>
+      <p class="lead">
+        Enter your rank and, optionally, narrow it down by exam, state, course, category
+        or quota. Every result comes straight from the backend's historical
+        closing-rank database — nothing here is estimated or interpolated.
+      </p>
+      <div class="hero-facts" id="heroFacts" aria-live="polite"></div>
+    </section>
+
+    <section class="predictor-card" id="predictor" aria-labelledby="predictorHeading">
+      <h2 id="predictorHeading" class="serif">Check your rank</h2>
+      <p class="sub">Required fields are marked. Leaving a filter on "Any" widens your results.</p>
+
+      <form id="predictorForm" novalidate>
+        <div class="field-grid">
+          <div class="field">
+            <label for="rank">NEET rank <span aria-hidden="true">*</span></label>
+            <input type="number" id="rank" name="rank" inputmode="numeric" min="1" step="1"
+                   placeholder="e.g. 45210" required aria-describedby="rankError">
+            <span class="field-error" id="rankError" role="alert"></span>
+          </div>
+        </div>
+
+        <button type="button" class="advanced-toggle" id="advancedToggle" aria-expanded="false" aria-controls="advancedFilters">
+          More filters (exam, state, course, category, quota)
+          <svg width="11" height="7" viewBox="0 0 11 7" fill="none" aria-hidden="true"><path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+
+        <div class="field-grid" id="advancedFilters" hidden>
+          <div class="field">
+            <label for="exam">Exam</label>
+            <select id="exam" name="exam"><option value="">Any exam</option></select>
+          </div>
+          <div class="field">
+            <label for="state">State</label>
+            <select id="state" name="state"><option value="">Any state</option></select>
+          </div>
+          <div class="field">
+            <label for="authority">Counselling authority</label>
+            <select id="authority" name="authority"><option value="">Any authority</option></select>
+          </div>
+          <div class="field">
+            <label for="course">Course</label>
+            <select id="course" name="course"><option value="">Any course</option></select>
+          </div>
+          <div class="field">
+            <label for="category">Category</label>
+            <select id="category" name="category"><option value="">Any category</option></select>
+          </div>
+          <div class="field">
+            <label for="quota">Quota</label>
+            <select id="quota" name="quota"><option value="">Any quota</option></select>
+          </div>
+        </div>
+
+        <div class="predictor-actions">
+          <button type="submit" class="btn-primary" id="submitBtn">Predict my chances</button>
+          <button type="button" class="btn-secondary" id="resetBtn">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="results-section" id="resultsSection" aria-live="polite"></section>
+
+    <section class="info-section" id="how-it-works">
+      <h2 class="serif">How this works</h2>
+      <p class="section-sub">The predictor doesn't guess — it looks up what actually happened.</p>
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>1. You enter a rank</h3>
+          <p>Optionally narrow it down by exam, state, authority, course, category or quota.</p>
+        </div>
+        <div class="info-card">
+          <h3>2. It checks real records</h3>
+          <p>Your rank is compared against historical round-wise closing ranks stored in the backend database — the same data the counselling authorities publish.</p>
+        </div>
+        <div class="info-card">
+          <h3>3. You see what cleared</h3>
+          <p>Every college and course combination your rank would have cleared is shown, closest cutoffs first, each labelled by how comfortable the margin was.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="info-section" id="admission-info">
+      <h2 class="serif">Understanding your result</h2>
+      <p class="section-sub">A quick reference for reading NEET counselling outcomes.</p>
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>Closing rank</h3>
+          <p>The rank of the last candidate admitted to a specific college, course, category and quota in a given round. Clearing it doesn't guarantee a seat next year — cutoffs move year to year.</p>
+        </div>
+        <div class="info-card">
+          <h3>Category &amp; quota</h3>
+          <p>Cutoffs differ sharply by category (General, OBC, SC, ST, EWS, PwD) and quota (All-India, State, Management, NRI). Always check results under your own category and quota, not just "General".</p>
+        </div>
+        <div class="info-card">
+          <h3>Rounds change things</h3>
+          <p>Cutoffs usually loosen in later rounds (R2, R3, mop-up) as seats vacated by upgrades and withdrawals open up. A rank that misses Round 1 may still clear a later round.</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="disclaimer">
+      Predictions are generated from historical closing-rank data and are indicative only —
+      actual cutoffs vary by year and are set solely by the official counselling authorities
+      (MCC / state authorities). This tool does not conduct counselling, allot seats, or accept
+      payments, and is not affiliated with any government body.
+    </p>
+
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>© <span id="year"></span> NEET Rank Predictor. Data updates depend on the backend's imported rounds.</span>
+    <span><a href="#top">Back to top</a></span>
+  </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

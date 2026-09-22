@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.routers import admin, health, meta, predict
@@ -57,12 +58,18 @@ app.include_router(meta.router, prefix=settings.API_V1_PREFIX)
 app.include_router(predict.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
 
-
-@app.get("/", tags=["health"])
-def root():
-    return {
-        "service": settings.PROJECT_NAME,
-        "status": "running",
-        "docs": "/docs",
-        "health": f"{settings.API_V1_PREFIX}/health",
-    }
+# ---------------------------------------------------------------------------
+# Frontend UI
+# ---------------------------------------------------------------------------
+# Serves the static frontend (index.html, css/, js/) from frontend_dist/ at
+# the repo root. Mounted LAST and at "/" so it never shadows /docs, /redoc,
+# /openapi.json, or any /api/v1/... route registered above — Starlette
+# matches routes in the order they were added, so those all still win.
+#
+# This replaces the previous `@app.get("/")` JSON handler (removed below):
+# that JSON info is still available, unchanged, at /api/v1/health, which is
+# also what this Dockerfile's own HEALTHCHECK already points at, so nothing
+# that depends on health-checking is affected. If some external monitor was
+# pinging bare "/" expecting that JSON specifically, point it at
+# /api/v1/health instead.
+app.mount("/", StaticFiles(directory="frontend_dist", html=True), name="frontend")
