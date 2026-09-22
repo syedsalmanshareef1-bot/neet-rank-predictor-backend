@@ -44,6 +44,7 @@
     </a>
     <nav class="site-nav" aria-label="Primary">
       <a href="#predictor">Predictor</a>
+      <a href="#colleges">Colleges</a>
       <a href="#how-it-works">How it works</a>
       <a href="#admission-info">Admission info</a>
     </nav>
@@ -122,6 +123,22 @@
     </section>
 
     <section class="results-section" id="resultsSection" aria-live="polite"></section>
+
+    <section class="info-section" id="colleges" aria-labelledby="collegesHeading">
+      <h2 id="collegesHeading" class="serif">Browse colleges</h2>
+      <p class="section-sub">Pick a state to see its colleges, or search by name across all states.</p>
+
+      <div class="college-search-row">
+        <input type="search" id="collegeSearch" placeholder="Search a college by name (e.g. AIIMS, Government Medical College)" aria-label="Search colleges by name" minlength="2">
+        <button type="button" class="btn-secondary" id="collegeClear" hidden>Clear</button>
+      </div>
+
+      <div class="state-grid" id="stateGrid" aria-label="Filter colleges by state"></div>
+
+      <div class="college-results" id="collegeResults" aria-live="polite">
+        <p class="state-box-inline">Pick a state above, or search by name, to see colleges.</p>
+      </div>
+    </section>
 
     <section class="info-section" id="how-it-works">
       <h2 class="serif">How this works</h2>

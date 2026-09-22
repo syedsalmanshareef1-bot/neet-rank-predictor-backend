@@ -264,6 +264,54 @@ nav.site-nav a:hover { color: var(--teal-dark); }
 .result-meta span.k { font-size: 11px; color: var(--muted-2); }
 .result-meta span.v { font-weight: 600; color: var(--navy); font-variant-numeric: tabular-nums; }
 
+/* ---------- colleges / states browse ---------- */
+.college-search-row {
+  display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.college-search-row input[type="search"] {
+  flex: 1; min-width: 220px;
+  font: inherit; font-size: 14.5px;
+  padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: #fff; color: var(--navy);
+}
+.college-search-row input[type="search"]:focus { border-color: var(--teal); }
+
+.state-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.state-chip {
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--navy);
+  background: var(--panel); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 10px; cursor: pointer; text-align: center;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.state-chip:hover { border-color: var(--teal); }
+.state-chip[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+
+.college-results .state-box-inline {
+  color: var(--muted); font-size: 14px; text-align: center;
+  border: 1px dashed var(--border); border-radius: var(--radius); padding: 24px; margin: 0;
+}
+.college-results .state-box-inline.error { border-color: rgba(164,52,43,0.35); background: var(--risk-bg); color: var(--risk-fg); }
+
+.college-results-summary {
+  font-size: 13px; color: var(--muted); margin-bottom: 12px;
+}
+
+.college-list { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 640px) { .college-list { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 960px) { .college-list { grid-template-columns: repeat(3, 1fr); } }
+
+.college-item {
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 14px; font-size: 13.5px;
+}
+.college-item .name { font-weight: 600; color: var(--navy); display: block; margin-bottom: 3px; }
+.college-item .state { color: var(--muted); font-size: 12px; }
+
 /* ---------- info sections ---------- */
 .info-section { margin-top: 64px; }
 .info-section h2 { font-size: 24px; margin: 0 0 8px; }

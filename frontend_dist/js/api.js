@@ -123,6 +123,21 @@
       return withRetry(() => request("/quotas"));
     },
 
+    /**
+     * GET /colleges — optional `state` (exact match) and `search`
+     * (partial, case-insensitive name match, 2+ chars per the backend's
+     * own validation). At least one should usually be set by the caller;
+     * the backend allows both omitted too (returns up to `limit`).
+     */
+    colleges({ state, search, limit = 100 } = {}) {
+      const params = new URLSearchParams();
+      if (state) params.set("state", state);
+      if (search) params.set("search", search);
+      if (limit) params.set("limit", String(limit));
+      const qs = params.toString();
+      return withRetry(() => request("/colleges" + (qs ? `?${qs}` : "")));
+    },
+
     /** Fetches every filter list in parallel; a single failed list doesn't block the others. */
     async allFilterOptions() {
       const keys = ["exams", "states", "authorities", "courses", "categories", "quotas"];
@@ -150,6 +165,19 @@
         if (v !== "" && v !== null && v !== undefined) cleanFilters[k] = v;
       });
       return withRetry(() => request("/predict", { method: "POST", body: { rank, filters: cleanFilters, limit } }), 0);
+    },
+
+    /**
+     * GET /colleges — optional state and search (min 2 chars, backend-enforced).
+     * @param {{state?: string, search?: string, limit?: number}} params
+     */
+    colleges({ state, search, limit = 100 } = {}) {
+      const qs = new URLSearchParams();
+      if (state) qs.set("state", state);
+      if (search && search.trim().length >= 2) qs.set("search", search.trim());
+      if (limit) qs.set("limit", String(limit));
+      const query = qs.toString();
+      return withRetry(() => request(`/colleges${query ? `?${query}` : ""}`));
     },
   };
 

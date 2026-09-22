@@ -76,6 +76,8 @@
         el.disabled = false;
       }
     });
+
+    return options;
   }
 
   // ------------------------------------------------------- advanced UI
@@ -248,7 +250,114 @@
     return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
+  // ==================================================== colleges browse
+  const collegeEls = {
+    search: document.getElementById("collegeSearch"),
+    clear: document.getElementById("collegeClear"),
+    stateGrid: document.getElementById("stateGrid"),
+    results: document.getElementById("collegeResults"),
+  };
+
+  let selectedState = null; // string or null
+  let collegeDebounceTimer = null;
+
+  function renderStateGrid(states) {
+    if (!states || !states.length) {
+      collegeEls.stateGrid.innerHTML = `<p class="state-box-inline">Couldn't load the list of states.</p>`;
+      return;
+    }
+    collegeEls.stateGrid.innerHTML = states
+      .map(
+        (s) => `<button type="button" class="state-chip" data-state="${escapeHtml(s.name)}" aria-pressed="false">${escapeHtml(s.name)}</button>`
+      )
+      .join("");
+
+    collegeEls.stateGrid.querySelectorAll(".state-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const stateName = chip.dataset.state;
+        const alreadySelected = selectedState === stateName;
+        selectedState = alreadySelected ? null : stateName;
+
+        collegeEls.stateGrid.querySelectorAll(".state-chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
+        if (!alreadySelected) chip.setAttribute("aria-pressed", "true");
+
+        runCollegeQuery();
+      });
+    });
+  }
+
+  collegeEls.search.addEventListener("input", () => {
+    collegeEls.clear.hidden = collegeEls.search.value.trim() === "";
+    clearTimeout(collegeDebounceTimer);
+    collegeDebounceTimer = setTimeout(runCollegeQuery, 350);
+  });
+
+  collegeEls.clear.addEventListener("click", () => {
+    collegeEls.search.value = "";
+    collegeEls.clear.hidden = true;
+    runCollegeQuery();
+  });
+
+  async function runCollegeQuery() {
+    const term = collegeEls.search.value.trim();
+
+    if (term.length === 1) {
+      collegeEls.results.innerHTML = `<p class="state-box-inline">Keep typing — search needs at least 2 characters.</p>`;
+      return;
+    }
+
+    const hasSearch = term.length >= 2;
+    const hasState = Boolean(selectedState);
+
+    if (!hasSearch && !hasState) {
+      collegeEls.results.innerHTML = `<p class="state-box-inline">Pick a state above, or search by name, to see colleges.</p>`;
+      return;
+    }
+
+    collegeEls.results.innerHTML = `<p class="state-box-inline">Loading colleges…</p>`;
+
+    try {
+      const list = await window.NeetApi.colleges({
+        state: selectedState || undefined,
+        search: hasSearch ? term : undefined,
+        limit: 100,
+      });
+      renderCollegeResults(list, { hasSearch, hasState });
+    } catch (err) {
+      collegeEls.results.innerHTML = `
+        <p class="state-box-inline error"><strong>Couldn't load colleges.</strong><br>${escapeHtml(err.message || "Please try again.")}</p>`;
+    }
+  }
+
+  function renderCollegeResults(list, { hasSearch, hasState }) {
+    if (!list || list.length === 0) {
+      const context = hasSearch && hasState
+        ? `matching "${escapeHtml(collegeEls.search.value.trim())}" in ${escapeHtml(selectedState)}`
+        : hasSearch
+        ? `matching "${escapeHtml(collegeEls.search.value.trim())}"`
+        : `in ${escapeHtml(selectedState)}`;
+      collegeEls.results.innerHTML = `<p class="state-box-inline">No colleges found ${context}.</p>`;
+      return;
+    }
+
+    const items = list
+      .map(
+        (c) => `
+        <div class="college-item">
+          <span class="name">${escapeHtml(c.name)}</span>
+          ${c.state ? `<span class="state">${escapeHtml(c.state)}</span>` : ""}
+        </div>`
+      )
+      .join("");
+
+    collegeEls.results.innerHTML = `
+      <p class="college-results-summary">${list.length.toLocaleString("en-IN")} college${list.length === 1 ? "" : "s"} found${list.length === 100 ? " (showing first 100 — narrow your search for more precise results)" : ""}</p>
+      <div class="college-list">${items}</div>`;
+  }
+
   // ------------------------------------------------------- boot
   checkHealth();
-  loadFilterOptions();
+  loadFilterOptions().then((options) => {
+    renderStateGrid(options.states || []);
+  });
 })();
