@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -57,6 +57,13 @@ app.include_router(health.router, prefix=settings.API_V1_PREFIX)
 app.include_router(meta.router, prefix=settings.API_V1_PREFIX)
 app.include_router(predict.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
+
+
+@app.get("/admin", include_in_schema=False)
+def admin_page():
+    """Lets /admin work without typing the .html extension."""
+    return FileResponse("frontend_dist/admin.html")
+
 
 # ---------------------------------------------------------------------------
 # Frontend UI
