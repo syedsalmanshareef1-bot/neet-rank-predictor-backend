@@ -251,6 +251,14 @@
   }
 
   // ==================================================== colleges browse
+  // This section ports the exact table/round-pivot/heat-color logic from
+  // frontend_integration/neet-rank-predictor-api-connected.html. The only
+  // change is the data source: that file reads from a local, hand-imported
+  // MASTER dataset; here, openState() fetches the SAME shape of data live
+  // from the real backend via POST /predict (rank=1 matches every round on
+  // file for that state), then groups it into the same
+  // institute+quota+course+category "rows with nested rounds" structure
+  // the original's renderTable() expects. Every number is real.
   const collegeEls = {
     gridView: document.getElementById("collegeGridView"),
     tableView: document.getElementById("collegeTableView"),
@@ -270,23 +278,15 @@
     filterRound: document.getElementById("filterRound"),
     activeFilterCount: document.getElementById("activeFilterCount"),
     clearFiltersBtn: document.getElementById("clearTableFiltersBtn"),
-    stateResults: document.getElementById("collegeStateResults"),
+    resultsCount: document.getElementById("collegeResultsCount"),
+    tableHead: document.getElementById("collegeTableHead"),
+    tableBody: document.getElementById("collegeTableBody"),
   };
 
   let selectedState = null;
   let collegeDebounceTimer = null;
   let institutDebounceTimer = null;
-  let currentStateResults = []; // full, unfiltered /predict results for the selected state
-
-  const FILTER_FIELD_MAP = {
-    filterQuota: "quota",
-    filterCourse: "course",
-    filterCategory: "category",
-    filterAuthority: "authority",
-    filterYear: "year",
-    filterRound: "round",
-  };
-  const tableFilters = { institute: "", quota: "", course: "", category: "", authority: "", year: "", round: "" };
+  let currentStateRaw = []; // flat /predict results for the selected state, unfiltered
 
   // ---------------------------------------------------------- state grid
   function renderStateGrid(states) {
@@ -325,8 +325,6 @@
   }
 
   // --------------------------------------------- top-level name search
-  // (no state picked yet — /colleges is the only endpoint that supports
-  // searching by name without a rank; it returns names only, no rank data)
   collegeEls.search.addEventListener("input", () => {
     collegeEls.clear.hidden = collegeEls.search.value.trim() === "";
     clearTimeout(collegeDebounceTimer);
@@ -392,9 +390,13 @@
     collegeEls.tableView.hidden = false;
     collegeEls.stateTitle.textContent = stateName;
     collegeEls.stateSubtitle.textContent = "Loading…";
-    collegeEls.stateResults.innerHTML = `<p class="state-box-inline">Loading…</p>`;
-    Object.keys(tableFilters).forEach((k) => (tableFilters[k] = ""));
+    collegeEls.resultsCount.textContent = "Loading…";
+    collegeEls.tableHead.innerHTML = "";
+    collegeEls.tableBody.innerHTML = "";
     collegeEls.filterInstitute.value = "";
+    [collegeEls.filterQuota, collegeEls.filterCourse, collegeEls.filterCategory, collegeEls.filterAuthority, collegeEls.filterYear, collegeEls.filterRound].forEach(
+      (el) => (el.value = "")
+    );
 
     try {
       // Real closing-rank data for every college in this state, via /predict
@@ -402,29 +404,27 @@
       // rank predictor above uses, just fed a rank of 1 instead of the
       // student's own rank, so it matches every round on file for the state.
       const data = await window.NeetApi.predict({ rank: 1, filters: { state: stateName }, limit: 500 });
-      currentStateResults = data.results || [];
-      const courseCount = new Set(currentStateResults.map((r) => r.course).filter(Boolean)).size;
+      currentStateRaw = data.results || [];
+      const courseCount = new Set(currentStateRaw.map((r) => r.course).filter(Boolean)).size;
       collegeEls.stateSubtitle.textContent =
-        `${currentStateResults.length.toLocaleString("en-IN")} record(s) across ${courseCount.toLocaleString("en-IN")} course(s)`;
-      renderFilterPanel(currentStateResults);
-      applyFiltersAndRender();
+        `${currentStateRaw.length.toLocaleString("en-IN")} record(s) across ${courseCount.toLocaleString("en-IN")} course(s)`;
+
+      fillSelect(collegeEls.filterQuota, distinct(currentStateRaw, "quota"));
+      fillSelect(collegeEls.filterCourse, distinct(currentStateRaw, "course"));
+      fillSelect(collegeEls.filterCategory, distinct(currentStateRaw, "category"));
+      fillSelect(collegeEls.filterAuthority, distinct(currentStateRaw, "authority"));
+      fillSelect(collegeEls.filterYear, distinct(currentStateRaw, "year"));
+      fillSelect(collegeEls.filterRound, distinct(currentStateRaw, "round"));
+
+      renderTable();
     } catch (err) {
       collegeEls.stateSubtitle.textContent = "";
-      collegeEls.stateResults.innerHTML = `
-        <p class="state-box-inline error"><strong>Couldn't load colleges for ${escapeHtml(stateName)}.</strong><br>${escapeHtml(err.message || "Please try again.")}</p>`;
+      collegeEls.resultsCount.textContent = `Couldn't load colleges for ${stateName}: ${err.message || "please try again."}`;
     }
   }
 
-  /** Builds Quota/Course/Category/Authority/Year/Round dropdowns from the real fetched results — options are real values only, never invented. Note: the backend's prediction results don't include an "exam" field, so no Exam filter is offered here (unlike the rank predictor above, which does accept it as an input filter). */
-  function renderFilterPanel(results) {
-    const distinct = (key) => [...new Set(results.map((r) => r[key]).filter((v) => v !== null && v !== undefined && v !== ""))].sort();
-
-    fillSelect(collegeEls.filterQuota, distinct("quota"));
-    fillSelect(collegeEls.filterCourse, distinct("course"));
-    fillSelect(collegeEls.filterCategory, distinct("category"));
-    fillSelect(collegeEls.filterAuthority, distinct("authority"));
-    fillSelect(collegeEls.filterYear, distinct("year"));
-    fillSelect(collegeEls.filterRound, distinct("round"));
+  function distinct(rows, key) {
+    return [...new Set(rows.map((r) => r[key]).filter((v) => v !== null && v !== undefined && v !== ""))].sort();
   }
 
   function fillSelect(selectEl, values) {
@@ -440,88 +440,151 @@
     selectEl.value = "";
   }
 
+  const FILTER_FIELD_MAP = {
+    filterQuota: "quota",
+    filterCourse: "course",
+    filterCategory: "category",
+    filterAuthority: "authority",
+    filterYear: "year",
+    filterRound: "round",
+  };
   Object.keys(FILTER_FIELD_MAP).forEach((id) => {
-    collegeEls[id] || (collegeEls[id] = document.getElementById(id));
-    document.getElementById(id).addEventListener("change", (e) => {
-      tableFilters[FILTER_FIELD_MAP[id]] = e.target.value;
-      applyFiltersAndRender();
-    });
+    document.getElementById(id).addEventListener("change", renderTable);
   });
-
   collegeEls.filterInstitute.addEventListener("input", () => {
     clearTimeout(institutDebounceTimer);
-    institutDebounceTimer = setTimeout(() => {
-      tableFilters.institute = collegeEls.filterInstitute.value.trim();
-      applyFiltersAndRender();
-    }, 250);
+    institutDebounceTimer = setTimeout(renderTable, 250);
   });
-
   collegeEls.clearFiltersBtn.addEventListener("click", () => {
-    Object.keys(tableFilters).forEach((k) => (tableFilters[k] = ""));
+    Object.keys(FILTER_FIELD_MAP).forEach((id) => (document.getElementById(id).value = ""));
     collegeEls.filterInstitute.value = "";
-    [collegeEls.filterQuota, collegeEls.filterCourse, collegeEls.filterCategory, collegeEls.filterAuthority, collegeEls.filterYear, collegeEls.filterRound].forEach(
-      (el) => (el.value = "")
-    );
-    applyFiltersAndRender();
+    renderTable();
   });
 
-  function applyFiltersAndRender() {
-    let results = currentStateResults;
-    if (tableFilters.quota) results = results.filter((r) => r.quota === tableFilters.quota);
-    if (tableFilters.course) results = results.filter((r) => r.course === tableFilters.course);
-    if (tableFilters.category) results = results.filter((r) => r.category === tableFilters.category);
-    if (tableFilters.authority) results = results.filter((r) => r.authority === tableFilters.authority);
-    if (tableFilters.year) results = results.filter((r) => String(r.year) === tableFilters.year);
-    if (tableFilters.round) results = results.filter((r) => r.round === tableFilters.round);
-    if (tableFilters.institute && tableFilters.institute.length >= 1) {
-      const needle = tableFilters.institute.toLowerCase();
-      results = results.filter(
-        (r) => (r.institute || "").toLowerCase().includes(needle) || (r.course || "").toLowerCase().includes(needle)
-      );
-    }
-
-    const activeCount = Object.values(tableFilters).filter(Boolean).length;
-    collegeEls.activeFilterCount.textContent = activeCount ? `${activeCount} filter${activeCount === 1 ? "" : "s"} active` : "";
-
-    renderCollegeTable(results);
+  function roundKeyParts(k) {
+    const [year, r] = k.split("-");
+    return { year, round: r };
+  }
+  function sortRoundKeys(keys) {
+    return keys.slice().sort((a, b) => {
+      const A = roundKeyParts(a), B = roundKeyParts(b);
+      if (A.year !== B.year) return A.year.localeCompare(B.year);
+      if (A.round === "Final" && B.round === "Final") return 0;
+      if (A.round === "Final") return 1;
+      if (B.round === "Final") return -1;
+      return (parseInt((A.round || "").replace(/\D/g, "")) || 0) - (parseInt((B.round || "").replace(/\D/g, "")) || 0);
+    });
+  }
+  function roundLabel(key) {
+    const p = roundKeyParts(key);
+    return p.round === "Final" ? `${p.year} Final` : `${p.year} ${p.round}`;
+  }
+  function heatColor(value, min, max) {
+    if (min === max) return { bg: "#FDE9C8", fg: "#8A4B0C" };
+    const t = (value - min) / (max - min);
+    if (t < 0.33) return { bg: "#FBE0DC", fg: "#A13D2F" };
+    if (t < 0.66) return { bg: "#FDF0C8", fg: "#8A5A0C" };
+    return { bg: "#DFF3E6", fg: "#1E7A4C" };
+  }
+  function naField(v) {
+    return v === null || v === undefined || v === "" ? '<span class="na">Not Available</span>' : escapeHtml(String(v));
+  }
+  function formatFeeDisplay(fee) {
+    if (fee === null || fee === undefined) return '<span class="rank-empty">-</span>';
+    return "₹" + Number(fee).toLocaleString("en-IN") + "*";
   }
 
-  /** Real closing-rank rows from /predict, rendered as a data table. */
-  function renderCollegeTable(results) {
-    if (!results || results.length === 0) {
-      collegeEls.stateResults.innerHTML = `<p class="state-box-inline">No colleges found in ${escapeHtml(selectedState)} matching these filters.</p>`;
-      return;
-    }
+  /** Groups flat /predict rows into institute+quota+course+category "cards" with a nested per-round-key closing rank, exactly like the reference's local row model — just built from live API rows instead of imported ones. */
+  function groupIntoRows(flatRows) {
+    const map = new Map();
+    flatRows.forEach((r) => {
+      const key = [r.quota || "", r.institute || "", r.course || "", r.category || ""].join("|");
+      if (!map.has(key)) {
+        map.set(key, { quota: r.quota, institute: r.institute, course: r.course, category: r.category, fee: r.fee, rounds: {} });
+      }
+      const row = map.get(key);
+      if (row.fee === null || row.fee === undefined) row.fee = r.fee;
+      const roundKey = `${r.year}-${r.round}`;
+      const existing = row.rounds[roundKey];
+      if (!existing || (typeof r.close_rank === "number" && r.close_rank < existing.close)) {
+        row.rounds[roundKey] = { open: r.open_rank ?? null, close: r.close_rank };
+      }
+    });
+    return [...map.values()];
+  }
 
-    const rows = results
+  function renderTable() {
+    if (!selectedState) return;
+
+    const q = collegeEls.filterQuota.value;
+    const c = collegeEls.filterCourse.value;
+    const cat = collegeEls.filterCategory.value;
+    const au = collegeEls.filterAuthority.value;
+    const yr = collegeEls.filterYear.value;
+    const rd = collegeEls.filterRound.value;
+    const text = collegeEls.filterInstitute.value.trim().toLowerCase();
+
+    let flat = currentStateRaw;
+    if (q) flat = flat.filter((r) => r.quota === q);
+    if (c) flat = flat.filter((r) => r.course === c);
+    if (cat) flat = flat.filter((r) => r.category === cat);
+    if (au) flat = flat.filter((r) => r.authority === au);
+    if (yr) flat = flat.filter((r) => String(r.year) === yr);
+    if (rd) flat = flat.filter((r) => r.round === rd);
+    if (text) flat = flat.filter((r) => (r.institute || "").toLowerCase().includes(text) || (r.course || "").toLowerCase().includes(text));
+
+    let rows = groupIntoRows(flat);
+
+    const allRoundKeys = new Set();
+    rows.forEach((r) => Object.keys(r.rounds).forEach((k) => allRoundKeys.add(k)));
+    const roundKeysPresent = sortRoundKeys([...allRoundKeys]);
+
+    const colStats = {};
+    roundKeysPresent.forEach((k) => {
+      const vals = rows.map((r) => (r.rounds[k] ? r.rounds[k].close : null)).filter((v) => v !== null);
+      colStats[k] = { min: Math.min(...vals), max: Math.max(...vals) };
+    });
+
+    rows = rows.slice().sort((a, b) => {
+      const av = Math.min(...Object.values(a.rounds).map((v) => v.close).filter((v) => v !== null), Infinity);
+      const bv = Math.min(...Object.values(b.rounds).map((v) => v.close).filter((v) => v !== null), Infinity);
+      return av - bv;
+    });
+
+    collegeEls.resultsCount.textContent = `${rows.length.toLocaleString("en-IN")} result(s)`;
+
+    const activeCount = [q, c, cat, au, yr, rd, text].filter(Boolean).length;
+    collegeEls.activeFilterCount.textContent = activeCount ? `${activeCount} filter${activeCount === 1 ? "" : "s"} active` : "";
+
+    collegeEls.tableHead.innerHTML =
+      '<tr><th class="sticky-col col-quota">Quota</th><th class="sticky-col col-institute">Institute</th><th>Course</th><th>Category</th><th>Fees</th>' +
+      roundKeysPresent.map((k) => `<th class="round-col">${roundLabel(k)}</th>`).join("") +
+      "</tr>";
+
+    collegeEls.tableBody.innerHTML = rows
       .map((r) => {
-        const rank = typeof r.close_rank === "number" ? r.close_rank.toLocaleString("en-IN") : "—";
-        const fee = typeof r.fee === "number" ? `₹${r.fee.toLocaleString("en-IN")}` : "—";
-        return `
-        <tr>
-          <td class="institute-cell" data-label="Institute">
-            ${escapeHtml(r.institute || "—")}
-            ${r.course ? `<span class="course-line">${escapeHtml(r.course)}</span>` : ""}
-          </td>
-          <td data-label="Category">${escapeHtml(r.category || "—")}</td>
-          <td data-label="Quota">${escapeHtml(r.quota || "—")}</td>
-          <td data-label="Authority">${escapeHtml(r.authority || "—")}</td>
-          <td data-label="Year">${r.year ?? "—"}</td>
-          <td data-label="Round">${escapeHtml(r.round || "—")}</td>
-          <td data-label="Fee">${fee}</td>
-          <td data-label="Closing rank"><span class="rank-pill" data-chance="${escapeHtml(r.chance || "")}">${rank}</span></td>
-        </tr>`;
+        const cells = roundKeysPresent
+          .map((k) => {
+            const lbl = roundLabel(k);
+            const v = r.rounds[k] ? r.rounds[k].close : null;
+            if (v === null || v === undefined) return `<td class="round-cell rank-empty" data-label="${lbl}">-</td>`;
+            const stat = colStats[k];
+            const color = heatColor(v, stat.min, stat.max);
+            return `<td class="round-cell" data-label="${lbl}"><span class="rank-pill" style="background:${color.bg};color:${color.fg};">${v.toLocaleString("en-IN")}</span></td>`;
+          })
+          .join("");
+        const feeCell = `<td data-label="Fees">${formatFeeDisplay(r.fee)}</td>`;
+        return (
+          `<tr><td class="sticky-col col-quota" data-label="Quota"><span class="quota-pill">${naField(r.quota)}</span></td>` +
+          `<td class="sticky-col col-institute" data-label="Institute" style="font-weight:600;">${escapeHtml(r.institute || "")}</td>` +
+          `<td data-label="Course">${naField(r.course)}</td>` +
+          `<td data-label="Category">${naField(r.category)}</td>` +
+          feeCell +
+          cells +
+          `</tr>`
+        );
       })
       .join("");
-
-    collegeEls.stateResults.innerHTML = `
-      <p class="college-results-summary">${results.length.toLocaleString("en-IN")} of ${currentStateResults.length.toLocaleString("en-IN")} record(s), best closing rank first</p>
-      <div class="college-table-wrap">
-        <table class="college-table">
-          <thead><tr><th>Institute</th><th>Category</th><th>Quota</th><th>Authority</th><th>Year</th><th>Round</th><th>Fee</th><th>Closing rank</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`;
   }
 
   // ------------------------------------------------------- boot

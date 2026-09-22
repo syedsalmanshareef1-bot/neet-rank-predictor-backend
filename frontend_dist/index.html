@@ -187,7 +187,21 @@
           </div>
         </div>
 
-        <div class="college-results" id="collegeStateResults" aria-live="polite"></div>
+        <div class="legend">
+          <span><span class="dot" style="background:#FBE0DC;"></span>Most competitive third</span>
+          <span><span class="dot" style="background:#FDF0C8;"></span>Middle third</span>
+          <span><span class="dot" style="background:#DFF3E6;"></span>Least competitive third</span>
+          <span>(colour scale is relative to each round column, recalculated per view)</span>
+        </div>
+        <div id="collegeResultsCount"></div>
+        <div id="collegeStateResults" aria-live="polite">
+          <div class="college-table-wrap">
+            <table class="college-table">
+              <thead id="collegeTableHead"></thead>
+              <tbody id="collegeTableBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
     </section>

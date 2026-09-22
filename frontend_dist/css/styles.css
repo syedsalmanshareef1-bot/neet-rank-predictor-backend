@@ -276,100 +276,93 @@ nav.site-nav a:hover { color: var(--teal-dark); }
 }
 .college-search-row input[type="search"]:focus { border-color: var(--teal); }
 
-.state-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
-  margin-bottom: 22px;
-}
-.state-card {
-  border: 1px solid var(--border); border-radius: 14px;
-  background: var(--panel); cursor: pointer; overflow: hidden;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-  box-shadow: 0 1px 3px rgba(20,33,61,0.06);
-  text-align: left; padding: 0; font: inherit;
-}
-.state-card:hover { border-color: var(--teal); transform: translateY(-3px); box-shadow: 0 10px 24px rgba(20,33,61,0.12); }
-.state-card[aria-pressed="true"] { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(13,115,119,0.25); }
+/* ---- exact port from frontend_integration/neet-rank-predictor-api-connected.html ---- */
+.state-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+@media (max-width: 1100px) { .state-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 760px) { .state-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 460px) { .state-grid { grid-template-columns: 1fr; } }
+.state-card { border: 1px solid #E4E0D3; border-radius: 14px; background: #fff; cursor: pointer; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; box-shadow: 0 1px 3px rgba(20,33,61,0.06); text-align: left; padding: 0; font: inherit; }
+.state-card:hover { border-color: #0D7377; transform: translateY(-3px); box-shadow: 0 10px 24px rgba(20,33,61,0.12); }
 .state-card-banner { position: relative; height: 92px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .state-map-svg { height: 64px; width: auto; max-width: 82%; position: relative; z-index: 2; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.22)); }
-.landmark-badge {
-  position: absolute; right: 8px; bottom: 8px; width: 24px; height: 24px; border-radius: 50%;
-  background: rgba(20,33,61,0.38); display: flex; align-items: center; justify-content: center;
-  z-index: 3; backdrop-filter: blur(1px);
-}
+.landmark-badge { position: absolute; right: 8px; bottom: 8px; width: 24px; height: 24px; border-radius: 50%; background: rgba(20,33,61,0.38); display: flex; align-items: center; justify-content: center; z-index: 3; backdrop-filter: blur(1px); }
 .landmark-badge svg { width: 14px; height: 14px; }
-.state-card-body { padding: 10px 14px 14px; text-align: center; }
-.state-card-name { font-size: 13px; font-weight: 700; color: var(--navy); line-height: 1.25; }
+.state-card-body { padding: 14px 16px 16px; text-align: center; }
+.state-card-name { font-weight: 700; font-size: 14px; color: #14213D; }
 
-/* ---------- college filter panel + back button (table view) ---------- */
-.back-btn {
-  background: none; border: none; color: var(--teal-dark); font: inherit; font-size: 13.5px; font-weight: 600;
-  cursor: pointer; padding: 0; margin-bottom: 14px; display: inline-flex; align-items: center; gap: 4px;
-}
-.back-btn:hover { text-decoration: underline; }
+.back-btn { display: flex; align-items: center; gap: 6px; background: none; border: none; color: #0D7377; font-weight: 600; font-size: 14px; cursor: pointer; margin-bottom: 16px; padding: 0; font-family: inherit; }
 
-.filter-panel {
-  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px 18px; margin: 18px 0 20px;
-}
-.filter-panel-head {
-  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
-  margin-bottom: 14px;
-}
-.filter-panel-title { font-size: 13.5px; font-weight: 700; color: var(--navy); }
-.filter-panel-actions { display: flex; align-items: center; gap: 12px; }
-.active-filter-count { font-size: 12px; color: var(--muted); }
-.clear-filters-btn {
-  background: none; border: none; color: var(--teal-dark); font: inherit; font-size: 12.5px; font-weight: 600;
-  cursor: pointer; padding: 0;
-}
-.clear-filters-btn:hover { text-decoration: underline; }
+.filter-panel { background: #fff; border: 1px solid #E4E0D3; border-radius: 12px; padding: 20px 22px; margin-bottom: 22px; }
+.filter-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-panel-title { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #8A8878; }
+.filter-panel-actions { display: flex; align-items: center; gap: 10px; }
+.active-filter-count { font-size: 12.5px; color: #0D7377; font-weight: 600; }
+.clear-filters-btn { background: none; border: 1.5px solid #D8D4C8; color: #14213D; font-weight: 600; font-size: 12.5px; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+.clear-filters-btn:hover { background: #FBE0DC; border-color: #E7A99E; color: #A13D2F; }
+.filter-grid-new { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 16px; }
+.filter-field.wide { grid-column: span 2; }
+@media (max-width: 700px) { .filter-field.wide { grid-column: span 1; } }
+.filter-field label { display: block; font-size: 11px; font-weight: 700; color: #8A8878; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 7px; }
+.filter-field input, .filter-field select { width: 100%; border: 1.5px solid #D8D4C8; border-radius: 7px; padding: 10px 12px; font-size: 14px; background: #fff; font-family: inherit; color: #14213D; }
+.filter-field input:focus, .filter-field select:focus { outline: none; border-color: #0D7377; box-shadow: 0 0 0 3px rgba(13,115,119,0.14); }
 
-.filter-grid-new {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
-}
-@media (min-width: 640px) { .filter-grid-new { grid-template-columns: repeat(4, 1fr); } }
-.filter-field { display: flex; flex-direction: column; gap: 5px; }
-.filter-field.wide { grid-column: 1 / -1; }
-.filter-field label { font-size: 11.5px; font-weight: 600; color: var(--muted); }
-.filter-field select, .filter-field input {
-  font: inherit; font-size: 13px;
-  padding: 8px 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  background: #fff; color: var(--navy); width: 100%;
-}
-.filter-field select:focus, .filter-field input:focus { border-color: var(--teal); }
+table.college-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.college-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #5C5A50; padding: 12px 14px; border-bottom: 2px solid #E4E0D3; white-space: nowrap; position: sticky; top: 0; background: #fff; z-index: 3; box-shadow: 0 1px 0 #E4E0D3; }
+table.college-table th.round-col { text-align: center; min-width: 92px; }
+table.college-table td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid #EFEDE4; white-space: nowrap; }
+table.college-table td.round-cell { text-align: center; }
+table.college-table td.col-institute { white-space: normal; min-width: 240px; max-width: 320px; line-height: 1.4; }
+table.college-table tbody tr:hover td { background: #FAF9F5; }
+table.college-table th.sticky-col, table.college-table td.sticky-col { position: sticky; background: #fff; z-index: 1; }
+table.college-table th.sticky-col { z-index: 4; }
+table.college-table tbody tr:hover td.sticky-col { background: #FAF9F5; }
+table.college-table th.sticky-col.col-quota, table.college-table td.sticky-col.col-quota { left: 0; min-width: 150px; box-shadow: 1px 0 0 #E4E0D3; }
+table.college-table th.sticky-col.col-institute, table.college-table td.sticky-col.col-institute { left: 150px; box-shadow: 1px 0 0 #E4E0D3; }
+.college-table-wrap { background: #fff; border: 1px solid #E4E0D3; border-radius: 10px; overflow-x: auto; max-height: 72vh; overflow-y: auto; }
+table.college-table .rank-pill { font-weight: 700; padding: 3px 8px; border-radius: 5px; display: inline-block; min-width: 40px; text-align: center; font-size: 12px; }
+table.college-table .rank-empty { color: #C9C6BA; }
+table.college-table .quota-pill { font-size: 10.5px; color: #5C5A50; background: #F1EFE8; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+table.college-table .na { color: #C9C6BA; font-style: italic; }
 
-/* ---------- colleges data table ---------- */
-.college-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
-table.college-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
-table.college-table th {
-  text-align: left; font-size: 11px; text-transform: none; font-weight: 700; color: var(--muted-2);
-  padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
-  position: sticky; top: 0; background: var(--panel);
-}
-table.college-table td {
-  padding: 10px 12px; border-bottom: 1px solid var(--border-soft); vertical-align: top;
-}
-table.college-table tbody tr:last-child td { border-bottom: none; }
-table.college-table td.institute-cell { font-weight: 600; color: var(--navy); max-width: 260px; }
-table.college-table td.institute-cell .course-line { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
-table.college-table .rank-pill {
-  display: inline-block; font-weight: 700; font-variant-numeric: tabular-nums;
-  padding: 3px 8px; border-radius: 999px; font-size: 12.5px;
-}
-table.college-table .rank-pill[data-chance="High Chance"] { background: var(--success-bg); color: var(--success-fg); }
-table.college-table .rank-pill[data-chance="Moderate Chance"] { background: var(--warn-bg); color: var(--warn-fg); }
-table.college-table .rank-pill[data-chance="Borderline"] { background: var(--risk-bg); color: var(--risk-fg); }
+.legend { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; font-size: 12px; color: #5C5A50; flex-wrap: wrap; }
+.legend span.dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+#collegeResultsCount { font-size: 14px; color: #5C5A50; margin-bottom: 12px; }
 
-@media (max-width: 700px) {
-  table.college-table, table.college-table thead, table.college-table tbody, table.college-table tr, table.college-table td { display: block; width: 100%; }
-  table.college-table thead { display: none; }
-  table.college-table tr { padding: 12px 14px; border-bottom: 6px solid var(--cream); }
-  table.college-table td { border-bottom: none; padding: 4px 0; display: flex; justify-content: space-between; gap: 10px; }
-  table.college-table td::before { content: attr(data-label); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted-2); flex-shrink: 0; }
-  table.college-table td.institute-cell { display: block; }
-  table.college-table td.institute-cell::before { content: none; }
+@media (max-width: 1023px) {
+  #collegeTableView .college-table-wrap { background: transparent; border: none; overflow: visible; max-height: none; box-shadow: none; border-radius: 0; }
+  #collegeTableView table, #collegeTableView tbody, #collegeTableView tr, #collegeTableView th, #collegeTableView td { display: block; width: 100%; }
+  #collegeTableView thead { display: none; }
+  #collegeTableView tbody tr { background: #fff; border: 1px solid #E4E0D3; border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(20,33,61,0.07); }
+  #collegeTableView td { border: none; white-space: normal; padding: 0; position: static; left: auto; box-shadow: none; min-width: 0; max-width: none; font-size: 13.5px; }
+  #collegeTableView td.col-institute { font-size: 15.5px; font-weight: 700; line-height: 1.4; padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid #EFEDE4; word-break: break-word; }
+  #collegeTableView td[data-label] { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px dashed #F1EFE8; }
+  #collegeTableView td[data-label]:last-child { border-bottom: none; }
+  #collegeTableView td[data-label]::before { content: attr(data-label); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #8A8878; flex-shrink: 0; }
+  #collegeTableView td[data-label] > *, #collegeTableView td[data-label] { text-align: right; }
+  #collegeTableView .quota-pill { white-space: normal; text-align: right; }
+  #collegeTableView td.round-cell[data-label] .rank-pill { font-size: 12.5px; }
+  .filter-panel { padding: 16px; border-radius: 12px; }
+  .filter-panel-head { margin-bottom: 14px; }
+  .filter-panel-title { font-size: 11.5px; }
+  .filter-grid-new { grid-template-columns: 1fr; gap: 12px; }
+  .filter-field label { font-size: 11.5px; margin-bottom: 6px; }
+  .filter-field input, .filter-field select { padding: 12px 14px; font-size: 15px; min-height: 46px; }
+  .clear-filters-btn { padding: 10px 16px; font-size: 13px; min-height: 40px; }
+  .back-btn { font-size: 15px; padding: 6px 0; margin-bottom: 14px; }
+  .legend { font-size: 11.5px; gap: 8px 14px; margin-bottom: 12px; }
+  #collegeResultsCount { font-size: 13px; }
+  .state-grid { gap: 12px; }
+  .state-card-banner { height: 78px; }
+  .state-map-svg { height: 52px; }
+  .state-card-body { padding: 12px 12px 14px; }
+  .state-card-name { font-size: 13.5px; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  #collegeTableView tbody { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  #collegeTableView tbody tr { margin-bottom: 0; }
+  .filter-grid-new { grid-template-columns: repeat(2, 1fr); }
+  .filter-field.wide { grid-column: span 2; }
+  .state-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 .college-results .state-box-inline {
