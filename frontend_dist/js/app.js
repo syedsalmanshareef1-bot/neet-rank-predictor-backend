@@ -252,123 +252,117 @@
 
   // ==================================================== colleges browse
   const collegeEls = {
+    gridView: document.getElementById("collegeGridView"),
+    tableView: document.getElementById("collegeTableView"),
     search: document.getElementById("collegeSearch"),
     clear: document.getElementById("collegeClear"),
     stateGrid: document.getElementById("stateGrid"),
-    results: document.getElementById("collegeResults"),
+    searchResults: document.getElementById("collegeSearchResults"),
+    backBtn: document.getElementById("backToStatesBtn"),
+    stateTitle: document.getElementById("stateViewTitle"),
+    stateSubtitle: document.getElementById("stateViewSubtitle"),
+    filterInstitute: document.getElementById("filterInstitute"),
+    filterQuota: document.getElementById("filterQuota"),
+    filterCourse: document.getElementById("filterCourse"),
+    filterCategory: document.getElementById("filterCategory"),
+    filterAuthority: document.getElementById("filterAuthority"),
+    filterYear: document.getElementById("filterYear"),
+    filterRound: document.getElementById("filterRound"),
+    activeFilterCount: document.getElementById("activeFilterCount"),
+    clearFiltersBtn: document.getElementById("clearTableFiltersBtn"),
+    stateResults: document.getElementById("collegeStateResults"),
   };
 
-  let selectedState = null; // string or null
+  let selectedState = null;
   let collegeDebounceTimer = null;
+  let institutDebounceTimer = null;
+  let currentStateResults = []; // full, unfiltered /predict results for the selected state
 
+  const FILTER_FIELD_MAP = {
+    filterQuota: "quota",
+    filterCourse: "course",
+    filterCategory: "category",
+    filterAuthority: "authority",
+    filterYear: "year",
+    filterRound: "round",
+  };
+  const tableFilters = { institute: "", quota: "", course: "", category: "", authority: "", year: "", round: "" };
+
+  // ---------------------------------------------------------- state grid
   function renderStateGrid(states) {
     if (!states || !states.length) {
       collegeEls.stateGrid.innerHTML = `<p class="state-box-inline">Couldn't load the list of states.</p>`;
       return;
     }
     collegeEls.stateGrid.innerHTML = states
-      .map(
-        (s) => `<button type="button" class="state-chip" data-state="${escapeHtml(s.name)}" aria-pressed="false">${escapeHtml(s.name)}</button>`
-      )
+      .map((s) => {
+        const v = window.StateMaps ? window.StateMaps.stateVisual(s.name) : { grad: ["#0d7377", "#14213d"], mapEntry: null, landmark: null };
+        const gradId = "sg-" + s.name.replace(/[^a-zA-Z0-9]/g, "");
+        const mapSvg = v.mapEntry
+          ? `<svg class="state-map-svg" viewBox="${v.mapEntry.vb}" preserveAspectRatio="xMidYMid meet">
+               <defs><linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="1">
+                 <stop offset="0" stop-color="#fff" stop-opacity="0.96"/><stop offset="1" stop-color="#fff" stop-opacity="0.72"/>
+               </linearGradient></defs>
+               <path d="${v.mapEntry.d}" fill="url(#${gradId})"/>
+             </svg>`
+          : "";
+        const badge = v.landmark ? `<div class="landmark-badge"><svg viewBox="0 0 24 24" fill="#fff">${v.landmark}</svg></div>` : "";
+        return `
+          <button type="button" class="state-card" data-state="${escapeHtml(s.name)}">
+            <div class="state-card-banner" style="background:linear-gradient(135deg, ${v.grad[0]}, ${v.grad[1]});">
+              ${mapSvg}${badge}
+            </div>
+            <div class="state-card-body">
+              <div class="state-card-name">${escapeHtml(s.name)}</div>
+            </div>
+          </button>`;
+      })
       .join("");
 
-    collegeEls.stateGrid.querySelectorAll(".state-chip").forEach((chip) => {
-      chip.addEventListener("click", () => {
-        const stateName = chip.dataset.state;
-        const alreadySelected = selectedState === stateName;
-        selectedState = alreadySelected ? null : stateName;
-
-        collegeEls.stateGrid.querySelectorAll(".state-chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
-        if (!alreadySelected) chip.setAttribute("aria-pressed", "true");
-
-        runCollegeQuery();
-      });
+    collegeEls.stateGrid.querySelectorAll(".state-card").forEach((card) => {
+      card.addEventListener("click", () => openState(card.dataset.state));
     });
   }
 
+  // --------------------------------------------- top-level name search
+  // (no state picked yet — /colleges is the only endpoint that supports
+  // searching by name without a rank; it returns names only, no rank data)
   collegeEls.search.addEventListener("input", () => {
     collegeEls.clear.hidden = collegeEls.search.value.trim() === "";
     clearTimeout(collegeDebounceTimer);
-    collegeDebounceTimer = setTimeout(runCollegeQuery, 350);
+    collegeDebounceTimer = setTimeout(runNameSearch, 350);
   });
-
   collegeEls.clear.addEventListener("click", () => {
     collegeEls.search.value = "";
     collegeEls.clear.hidden = true;
-    runCollegeQuery();
+    runNameSearch();
   });
 
-  async function runCollegeQuery() {
+  async function runNameSearch() {
     const term = collegeEls.search.value.trim();
-
+    if (!term) {
+      collegeEls.searchResults.innerHTML = `<p class="state-box-inline">Pick a state above, or search by name, to see colleges.</p>`;
+      return;
+    }
     if (term.length === 1) {
-      collegeEls.results.innerHTML = `<p class="state-box-inline">Keep typing — search needs at least 2 characters.</p>`;
+      collegeEls.searchResults.innerHTML = `<p class="state-box-inline">Keep typing — search needs at least 2 characters.</p>`;
       return;
     }
-
-    const hasSearch = term.length >= 2;
-    const hasState = Boolean(selectedState);
-
-    if (!hasSearch && !hasState) {
-      collegeEls.results.innerHTML = `<p class="state-box-inline">Pick a state above, or search by name, to see colleges.</p>`;
-      return;
-    }
-
-    collegeEls.results.innerHTML = `<p class="state-box-inline">Loading…</p>`;
-
+    collegeEls.searchResults.innerHTML = `<p class="state-box-inline">Loading…</p>`;
     try {
-      if (hasState) {
-        // A state is picked: pull REAL closing-rank data for every college
-        // in it via /predict with rank=1 (the best possible rank), which
-        // therefore matches every round on file for that state — this is
-        // the same live endpoint the rank predictor above uses, just fed
-        // a rank of 1 instead of the student's own rank. If a search term
-        // is also typed, it narrows those real results client-side by
-        // institute/course name — no separate name-search endpoint
-        // supports doing both at once, so this keeps everything sourced
-        // from one real API response rather than combining two calls.
-        const data = await window.NeetApi.predict({ rank: 1, filters: { state: selectedState }, limit: 500 });
-        let results = data.results || [];
-        if (hasSearch) {
-          const needle = term.toLowerCase();
-          results = results.filter(
-            (r) => (r.institute || "").toLowerCase().includes(needle) || (r.course || "").toLowerCase().includes(needle)
-          );
-        }
-        renderStateTable(results, { hasSearch });
-      } else {
-        // No state picked, just a name search: the /colleges endpoint is
-        // the only one that supports searching by name without a rank —
-        // it returns names only, no closing-rank data.
-        const list = await window.NeetApi.colleges({ search: term, limit: 100 });
-        renderNameList(list);
-      }
+      const list = await window.NeetApi.colleges({ search: term, limit: 100 });
+      renderNameList(list);
     } catch (err) {
-      collegeEls.results.innerHTML = `
+      collegeEls.searchResults.innerHTML = `
         <p class="state-box-inline error"><strong>Couldn't load that.</strong><br>${escapeHtml(err.message || "Please try again.")}</p>`;
     }
   }
 
-  /** State selected: real closing-rank rows from /predict, one card per college+course+category. */
-  function renderStateTable(results, { hasSearch }) {
-    if (!results || results.length === 0) {
-      const context = hasSearch ? ` matching "${escapeHtml(collegeEls.search.value.trim())}"` : "";
-      collegeEls.results.innerHTML = `<p class="state-box-inline">No colleges found in ${escapeHtml(selectedState)}${context}.</p>`;
-      return;
-    }
-    const cards = results.map(renderResultCard).join("");
-    collegeEls.results.innerHTML = `
-      <p class="college-results-summary">${results.length.toLocaleString("en-IN")} college/course record${results.length === 1 ? "" : "s"} in ${escapeHtml(selectedState)}, best closing rank first</p>
-      <div class="result-grid">${cards}</div>`;
-  }
-
-  /** Name search only, no state picked: plain name list from /colleges (no rank data available here). */
   function renderNameList(list) {
     if (!list || list.length === 0) {
-      collegeEls.results.innerHTML = `<p class="state-box-inline">No colleges found matching "${escapeHtml(collegeEls.search.value.trim())}".</p>`;
+      collegeEls.searchResults.innerHTML = `<p class="state-box-inline">No colleges found matching "${escapeHtml(collegeEls.search.value.trim())}".</p>`;
       return;
     }
-
     const items = list
       .map(
         (c) => `
@@ -378,10 +372,156 @@
         </div>`
       )
       .join("");
-
-    collegeEls.results.innerHTML = `
-      <p class="college-results-summary">${list.length.toLocaleString("en-IN")} college${list.length === 1 ? "" : "s"} found${list.length === 100 ? " (showing first 100 — narrow your search for more precise results)" : ""}</p>
+    collegeEls.searchResults.innerHTML = `
+      <p class="college-results-summary">${list.length.toLocaleString("en-IN")} college${list.length === 1 ? "" : "s"} found${list.length === 100 ? " (showing first 100 — pick a state, or narrow your search, for more precise results)" : ""}</p>
       <div class="college-list">${items}</div>`;
+  }
+
+  // ----------------------------------------------------- state -> table
+  collegeEls.backBtn.addEventListener("click", showGrid);
+
+  function showGrid() {
+    collegeEls.tableView.hidden = true;
+    collegeEls.gridView.hidden = false;
+    selectedState = null;
+  }
+
+  async function openState(stateName) {
+    selectedState = stateName;
+    collegeEls.gridView.hidden = true;
+    collegeEls.tableView.hidden = false;
+    collegeEls.stateTitle.textContent = stateName;
+    collegeEls.stateSubtitle.textContent = "Loading…";
+    collegeEls.stateResults.innerHTML = `<p class="state-box-inline">Loading…</p>`;
+    Object.keys(tableFilters).forEach((k) => (tableFilters[k] = ""));
+    collegeEls.filterInstitute.value = "";
+
+    try {
+      // Real closing-rank data for every college in this state, via /predict
+      // with rank=1 (the best possible rank) — the same live endpoint the
+      // rank predictor above uses, just fed a rank of 1 instead of the
+      // student's own rank, so it matches every round on file for the state.
+      const data = await window.NeetApi.predict({ rank: 1, filters: { state: stateName }, limit: 500 });
+      currentStateResults = data.results || [];
+      const courseCount = new Set(currentStateResults.map((r) => r.course).filter(Boolean)).size;
+      collegeEls.stateSubtitle.textContent =
+        `${currentStateResults.length.toLocaleString("en-IN")} record(s) across ${courseCount.toLocaleString("en-IN")} course(s)`;
+      renderFilterPanel(currentStateResults);
+      applyFiltersAndRender();
+    } catch (err) {
+      collegeEls.stateSubtitle.textContent = "";
+      collegeEls.stateResults.innerHTML = `
+        <p class="state-box-inline error"><strong>Couldn't load colleges for ${escapeHtml(stateName)}.</strong><br>${escapeHtml(err.message || "Please try again.")}</p>`;
+    }
+  }
+
+  /** Builds Quota/Course/Category/Authority/Year/Round dropdowns from the real fetched results — options are real values only, never invented. Note: the backend's prediction results don't include an "exam" field, so no Exam filter is offered here (unlike the rank predictor above, which does accept it as an input filter). */
+  function renderFilterPanel(results) {
+    const distinct = (key) => [...new Set(results.map((r) => r[key]).filter((v) => v !== null && v !== undefined && v !== ""))].sort();
+
+    fillSelect(collegeEls.filterQuota, distinct("quota"));
+    fillSelect(collegeEls.filterCourse, distinct("course"));
+    fillSelect(collegeEls.filterCategory, distinct("category"));
+    fillSelect(collegeEls.filterAuthority, distinct("authority"));
+    fillSelect(collegeEls.filterYear, distinct("year"));
+    fillSelect(collegeEls.filterRound, distinct("round"));
+  }
+
+  function fillSelect(selectEl, values) {
+    const placeholder = selectEl.options[0]; // keep "All X" first option
+    selectEl.innerHTML = "";
+    selectEl.appendChild(placeholder);
+    values.forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = String(v);
+      selectEl.appendChild(opt);
+    });
+    selectEl.value = "";
+  }
+
+  Object.keys(FILTER_FIELD_MAP).forEach((id) => {
+    collegeEls[id] || (collegeEls[id] = document.getElementById(id));
+    document.getElementById(id).addEventListener("change", (e) => {
+      tableFilters[FILTER_FIELD_MAP[id]] = e.target.value;
+      applyFiltersAndRender();
+    });
+  });
+
+  collegeEls.filterInstitute.addEventListener("input", () => {
+    clearTimeout(institutDebounceTimer);
+    institutDebounceTimer = setTimeout(() => {
+      tableFilters.institute = collegeEls.filterInstitute.value.trim();
+      applyFiltersAndRender();
+    }, 250);
+  });
+
+  collegeEls.clearFiltersBtn.addEventListener("click", () => {
+    Object.keys(tableFilters).forEach((k) => (tableFilters[k] = ""));
+    collegeEls.filterInstitute.value = "";
+    [collegeEls.filterQuota, collegeEls.filterCourse, collegeEls.filterCategory, collegeEls.filterAuthority, collegeEls.filterYear, collegeEls.filterRound].forEach(
+      (el) => (el.value = "")
+    );
+    applyFiltersAndRender();
+  });
+
+  function applyFiltersAndRender() {
+    let results = currentStateResults;
+    if (tableFilters.quota) results = results.filter((r) => r.quota === tableFilters.quota);
+    if (tableFilters.course) results = results.filter((r) => r.course === tableFilters.course);
+    if (tableFilters.category) results = results.filter((r) => r.category === tableFilters.category);
+    if (tableFilters.authority) results = results.filter((r) => r.authority === tableFilters.authority);
+    if (tableFilters.year) results = results.filter((r) => String(r.year) === tableFilters.year);
+    if (tableFilters.round) results = results.filter((r) => r.round === tableFilters.round);
+    if (tableFilters.institute && tableFilters.institute.length >= 1) {
+      const needle = tableFilters.institute.toLowerCase();
+      results = results.filter(
+        (r) => (r.institute || "").toLowerCase().includes(needle) || (r.course || "").toLowerCase().includes(needle)
+      );
+    }
+
+    const activeCount = Object.values(tableFilters).filter(Boolean).length;
+    collegeEls.activeFilterCount.textContent = activeCount ? `${activeCount} filter${activeCount === 1 ? "" : "s"} active` : "";
+
+    renderCollegeTable(results);
+  }
+
+  /** Real closing-rank rows from /predict, rendered as a data table. */
+  function renderCollegeTable(results) {
+    if (!results || results.length === 0) {
+      collegeEls.stateResults.innerHTML = `<p class="state-box-inline">No colleges found in ${escapeHtml(selectedState)} matching these filters.</p>`;
+      return;
+    }
+
+    const rows = results
+      .map((r) => {
+        const rank = typeof r.close_rank === "number" ? r.close_rank.toLocaleString("en-IN") : "—";
+        const fee = typeof r.fee === "number" ? `₹${r.fee.toLocaleString("en-IN")}` : "—";
+        return `
+        <tr>
+          <td class="institute-cell" data-label="Institute">
+            ${escapeHtml(r.institute || "—")}
+            ${r.course ? `<span class="course-line">${escapeHtml(r.course)}</span>` : ""}
+          </td>
+          <td data-label="Category">${escapeHtml(r.category || "—")}</td>
+          <td data-label="Quota">${escapeHtml(r.quota || "—")}</td>
+          <td data-label="Authority">${escapeHtml(r.authority || "—")}</td>
+          <td data-label="Year">${r.year ?? "—"}</td>
+          <td data-label="Round">${escapeHtml(r.round || "—")}</td>
+          <td data-label="Fee">${fee}</td>
+          <td data-label="Closing rank"><span class="rank-pill" data-chance="${escapeHtml(r.chance || "")}">${rank}</span></td>
+        </tr>`;
+      })
+      .join("");
+
+    collegeEls.stateResults.innerHTML = `
+      <p class="college-results-summary">${results.length.toLocaleString("en-IN")} of ${currentStateResults.length.toLocaleString("en-IN")} record(s), best closing rank first</p>
+      <div class="college-table-wrap">
+        <table class="college-table">
+          <thead><tr><th>Institute</th><th>Category</th><th>Quota</th><th>Authority</th><th>Year</th><th>Round</th><th>Fee</th><th>Closing rank</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   }
 
   // ------------------------------------------------------- boot
