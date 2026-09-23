@@ -31,6 +31,29 @@ class CollegeItem(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Full cutoff browse (state-wise "PG Closing Rank" table on the Colleges page)
+# ---------------------------------------------------------------------------
+class CutoffBrowseRound(BaseModel):
+    year: int
+    round: str
+    open: Optional[int] = None
+    close: int
+
+
+class CutoffBrowseRow(BaseModel):
+    institute: str
+    state: Optional[str] = None
+    authority: Optional[str] = None
+    exam: Optional[str] = None
+    course: Optional[str] = None
+    category: Optional[str] = None
+    quota: Optional[str] = None
+    cutoffQuota: Optional[str] = None
+    fee: Optional[float] = None
+    rounds: Dict[str, CutoffBrowseRound]
+
+
+# ---------------------------------------------------------------------------
 # Prediction
 # ---------------------------------------------------------------------------
 class PredictionFilters(BaseModel):

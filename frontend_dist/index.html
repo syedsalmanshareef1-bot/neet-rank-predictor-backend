@@ -48,7 +48,7 @@
     </a>
     <nav class="site-nav" aria-label="Primary">
       <a href="#predictor" data-view="predictorView" aria-current="page">Predictor</a>
-      <a href="#colleges" data-view="collegesView">Colleges</a>
+      <a href="colleges.html">Colleges</a>
       <a href="#how-it-works" data-view="predictorView">How it works</a>
       <a href="#admission-info" data-view="predictorView">Admission info</a>
     </nav>
@@ -180,88 +180,6 @@
       (MCC / state authorities). This tool does not conduct counselling, allot seats, or accept
       payments, and is not affiliated with any government body.
     </p>
-
-    </div>
-
-    <div id="collegesView" hidden aria-labelledby="collegesHeading">
-
-      <div id="collegeGridView">
-        <h2 id="collegesHeading" class="serif">Browse colleges</h2>
-        <p class="section-sub">Pick a state to see its colleges, or search by name across all states.</p>
-
-        <div class="college-search-row">
-          <input type="search" id="collegeSearch" placeholder="Search a college by name (e.g. AIIMS, Government Medical College)" aria-label="Search colleges by name" minlength="2">
-          <button type="button" class="btn-secondary" id="collegeClear" hidden>Clear</button>
-        </div>
-
-        <div class="state-grid" id="stateGrid" aria-label="Pick a state"></div>
-
-        <div class="college-results" id="collegeSearchResults" aria-live="polite">
-          <p class="state-box-inline">Pick a state above, or search by name, to see colleges.</p>
-        </div>
-      </div>
-
-      <div id="collegeTableView" hidden>
-        <button type="button" class="back-btn" id="backToStatesBtn">&larr; All states</button>
-        <h2 id="stateViewTitle" class="serif"></h2>
-        <p class="section-sub" id="stateViewSubtitle"></p>
-
-        <div class="filter-panel">
-          <div class="filter-panel-head">
-            <span class="filter-panel-title">Filter results</span>
-            <div class="filter-panel-actions">
-              <span class="active-filter-count" id="activeFilterCount"></span>
-              <button type="button" class="clear-filters-btn" id="clearTableFiltersBtn">Clear all filters</button>
-            </div>
-          </div>
-          <div class="filter-grid-new">
-            <div class="filter-field wide">
-              <label for="filterInstitute">Institute or course</label>
-              <input type="text" id="filterInstitute" placeholder="Search by name…">
-            </div>
-            <div class="filter-field">
-              <label for="filterQuota">Quota</label>
-              <select id="filterQuota"><option value="">All quotas</option></select>
-            </div>
-            <div class="filter-field">
-              <label for="filterCourse">Course</label>
-              <select id="filterCourse"><option value="">All courses</option></select>
-            </div>
-            <div class="filter-field">
-              <label for="filterCategory">Category</label>
-              <select id="filterCategory"><option value="">All categories</option></select>
-            </div>
-            <div class="filter-field">
-              <label for="filterAuthority">Authority</label>
-              <select id="filterAuthority"><option value="">All authorities</option></select>
-            </div>
-            <div class="filter-field">
-              <label for="filterYear">Year</label>
-              <select id="filterYear"><option value="">All years</option></select>
-            </div>
-            <div class="filter-field">
-              <label for="filterRound">Round</label>
-              <select id="filterRound"><option value="">All rounds</option></select>
-            </div>
-          </div>
-        </div>
-
-        <div class="legend">
-          <span><span class="dot" style="background:#FBE0DC;"></span>Most competitive third</span>
-          <span><span class="dot" style="background:#FDF0C8;"></span>Middle third</span>
-          <span><span class="dot" style="background:#DFF3E6;"></span>Least competitive third</span>
-          <span>(colour scale is relative to each round column, recalculated per view)</span>
-        </div>
-        <div id="collegeResultsCount"></div>
-        <div id="collegeStateResults" aria-live="polite">
-          <div class="college-table-wrap">
-            <table class="college-table">
-              <thead id="collegeTableHead"></thead>
-              <tbody id="collegeTableBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
 
     </div>
 
