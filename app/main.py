@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.routers import admin, health, meta, predict
+from app.routers import admin, auth, health, meta, predict
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("neet_predictor")
@@ -54,6 +54,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(health.router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(meta.router, prefix=settings.API_V1_PREFIX)
 app.include_router(predict.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
@@ -63,6 +64,12 @@ app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
 def admin_page():
     """Lets /admin work without typing the .html extension."""
     return FileResponse("frontend_dist/admin.html")
+
+
+@app.get("/login", include_in_schema=False)
+def login_page():
+    """Lets /login work without typing the .html extension."""
+    return FileResponse("frontend_dist/login.html")
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +84,9 @@ def admin_page():
 # that JSON info is still available, unchanged, at /api/v1/health, which is
 # also what this Dockerfile's own HEALTHCHECK already points at, so nothing
 # that depends on health-checking is affected. If some external monitor was
+# pinging bare "/" expecting that JSON specifically, point it at
+# /api/v1/health instead.
+app.mount("/", StaticFiles(directory="frontend_dist", html=True), name="frontend")external monitor was
 # pinging bare "/" expecting that JSON specifically, point it at
 # /api/v1/health instead.
 app.mount("/", StaticFiles(directory="frontend_dist", html=True), name="frontend")

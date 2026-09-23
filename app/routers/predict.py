@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app import models
 from app.database import get_db
+from app.deps import get_current_user
 from app.schemas import PredictionRequest, PredictionResponse
 from app.services.predictor_service import predict
 
@@ -9,7 +11,11 @@ router = APIRouter(tags=["predictor"])
 
 
 @router.post("/predict", response_model=PredictionResponse)
-def predict_rank(payload: PredictionRequest, db: Session = Depends(get_db)):
+def predict_rank(
+    payload: PredictionRequest,
+    db: Session = Depends(get_db),
+    user: models.AdminUser = Depends(get_current_user),
+):
     """
     Given a rank and optional filters (exam, state, authority, course,
     category, quota), returns every college/course combination whose

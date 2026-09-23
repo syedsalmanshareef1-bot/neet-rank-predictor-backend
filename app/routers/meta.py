@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
+from app.deps import get_current_user
 from app.schemas import CollegeItem, NamedItem, RoundItem, YearItem
 
-router = APIRouter(tags=["reference data"])
+router = APIRouter(tags=["reference data"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/exams", response_model=list[NamedItem])
