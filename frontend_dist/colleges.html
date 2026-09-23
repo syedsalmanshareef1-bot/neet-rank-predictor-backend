@@ -293,7 +293,13 @@
 
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
-<script>NeetAuth.requireAuth();</script>
+<script>
+  if (window.NeetAuth) {
+    NeetAuth.requireAuth();
+  } else {
+    console.error("js/auth.js did not load — check that it's deployed alongside colleges.html.");
+  }
+</script>
 
 <header>
   <div class="header-inner">
@@ -303,7 +309,6 @@
     </div>
     <div class="tabs">
       <button class="tab-btn active" id="tabPG" onclick="switchTab('PG')">PG Closing Rank</button>
-      <button class="tab-btn" id="tabIMPORT" onclick="switchTab('IMPORT')">Import &amp; Master Data</button>
     </div>
     <a class="colleges-back-link" href="index.html" style="margin-left:auto;font-size:13px;font-weight:600;color:#5C5A50;text-decoration:none;white-space:nowrap;">&larr; Back to site</a>
   </div>
@@ -317,7 +322,7 @@
     <p class="subtitle" id="gridSubtitle">Click a state to view institute-wise, round-wise closing ranks.</p>
     <div class="state-grid" id="stateGrid"></div>
     <div style="margin-top:20px;" id="importLinkGrid">
-      <button class="import-btn" onclick="switchTab('IMPORT')">Import new cutoff files (State / Round / Year)</button>
+      <a class="import-btn" href="admin.html" style="display:inline-block;text-decoration:none;">Import new cutoff files (State / Round / Year)</a>
     </div>
   </div>
 
@@ -369,7 +374,7 @@
         </div>
       </div>
       <div class="filter-panel-footer" id="importLinkFilter">
-        <button class="import-btn" onclick="switchTab('IMPORT')">Import more data</button>
+        <a class="import-btn" href="admin.html" style="display:inline-block;text-decoration:none;">Import more data</a>
       </div>
     </div>
 
@@ -32396,22 +32401,23 @@ function updateNoticeAndFooter() {
   const rows = activeRows();
   const notice = document.getElementById("dataNotice");
   const footer = document.getElementById("footerText");
-  notice.innerHTML = '<span style="font-size:16px;">i</span><p><strong>Real data, round-wise where sourced, drawn from the shared Master Dataset:</strong> Columns only appear when a real round-specific number exists. Any cutoff file you import under "Import &amp; Master Data" for a matching college/course/category/quota is merged straight into these same rows — new years/rounds just add columns. <b>' + rows.length.toLocaleString("en-IN") + '</b> real records across <b>' + new Set(rows.map(r => r.state)).size + '</b> states loaded. Nothing is invented.</p>';
+  notice.innerHTML = '<span style="font-size:16px;">i</span><p><strong>Real data, round-wise where sourced, drawn from the shared Master Dataset:</strong> Columns only appear when a real round-specific number exists. New cutoff files uploaded via the <a href="admin.html">Admin Dashboard</a> for a matching college/course/category/quota are merged straight into these same rows — new years/rounds just add columns. <b>' + rows.length.toLocaleString("en-IN") + '</b> real records across <b>' + new Set(rows.map(r => r.state)).size + '</b> states loaded. Nothing is invented.</p>';
   footer.textContent = "Sources: MCC NEET-PG round-wise seat allotment results and state counselling authorities (e.g. KEA), as compiled by Careers360, plus anything you import. Verify current figures at mcc.nic.in / your state DME or KEA site before making decisions.";
 }
 
 function switchTab(tab) {
-  // Import / Master Data administration is desktop-only.
-  if (tab === "IMPORT" && window.innerWidth < 1024) { tab = "PG"; }
+  // Import & Master Data tab removed — cutoff updates now go through the
+  // Admin Dashboard (admin.html) instead. Only "PG" is reachable here.
+  tab = "PG";
   currentTab = tab;
-  document.getElementById("tabPG").classList.toggle("active", tab === "PG");
-  document.getElementById("tabIMPORT").classList.toggle("active", tab === "IMPORT");
-  document.getElementById("gridView").style.display = (tab === "IMPORT") ? "none" : "";
+  document.getElementById("tabPG").classList.add("active");
+  document.getElementById("gridView").style.display = "";
   document.getElementById("tableView").style.display = "none";
-  document.getElementById("importView").style.display = (tab === "IMPORT") ? "block" : "none";
-  document.getElementById("dataNotice").style.display = (tab === "IMPORT") ? "none" : "flex";
-  document.getElementById("footerText").style.display = (tab === "IMPORT") ? "none" : "block";
-  if (tab === "IMPORT") { updateDashboard(); } else { updateNoticeAndFooter(); showGrid(); }
+  document.getElementById("importView").style.display = "none";
+  document.getElementById("dataNotice").style.display = "flex";
+  document.getElementById("footerText").style.display = "block";
+  updateNoticeAndFooter();
+  showGrid();
 }
 
 // ---------- Per-state visual identity (gradient + icon), deterministic ----------
