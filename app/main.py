@@ -86,7 +86,4 @@ def login_page():
 # that depends on health-checking is affected. If some external monitor was
 # pinging bare "/" expecting that JSON specifically, point it at
 # /api/v1/health instead.
-app.mount("/", StaticFiles(directory="frontend_dist", html=True), name="frontend")external monitor was
-# pinging bare "/" expecting that JSON specifically, point it at
-# /api/v1/health instead.
 app.mount("/", StaticFiles(directory="frontend_dist", html=True), name="frontend")
