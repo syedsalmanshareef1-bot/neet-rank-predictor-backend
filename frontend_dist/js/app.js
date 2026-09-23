@@ -18,7 +18,23 @@
     submitBtn: document.getElementById("submitBtn"),
     resetBtn: document.getElementById("resetBtn"),
     resultsSection: document.getElementById("resultsSection"),
+    userPill: document.getElementById("userPill"),
+    userPillName: document.getElementById("userPillName"),
+    logoutBtn: document.getElementById("logoutBtn"),
   };
+
+  els.logoutBtn.addEventListener("click", () => window.NeetAuth.logout());
+
+  async function loadCurrentUser() {
+    try {
+      const me = await window.NeetApi.me();
+      els.userPillName.textContent = me.username;
+      els.userPill.hidden = false;
+    } catch (err) {
+      // A failed /auth/me (expired session) already triggers a redirect to
+      // login inside api.js — nothing extra to do here.
+    }
+  }
 
   const FILTER_SELECTS = {
     exams: { el: document.getElementById("exam"), label: "exam" },
@@ -621,6 +637,7 @@
 
   // ------------------------------------------------------- boot
   checkHealth();
+  loadCurrentUser();
   loadFilterOptions().then((options) => {
     renderStateGrid(options.states || []);
   });

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Log in — NEET Rank Predictor</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230D7377'/%3E%3Cpath d='M32 16v32M16 32h32' stroke='white' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="css/styles.css">
+
+<style>
+  /* Page-specific layout — the shared stylesheet covers colors/fonts/buttons/inputs already. */
+  body.auth-body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .auth-card { width: 100%; max-width: 400px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 32px 28px; box-shadow: var(--shadow); }
+  .auth-brand { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 22px; }
+  .auth-card h1 { font-size: 22px; margin: 0 0 4px; text-align: center; }
+  .auth-card .sub { text-align: center; color: var(--muted); font-size: 13.5px; margin: 0 0 24px; }
+  .auth-tabs { display: flex; background: var(--border-soft); border-radius: 8px; padding: 3px; margin-bottom: 22px; }
+  .auth-tab { flex: 1; border: none; background: none; padding: 8px; border-radius: 6px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+  .auth-tab[aria-selected="true"] { background: #fff; color: var(--teal-dark); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .auth-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .auth-field label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .password-row { position: relative; }
+  .password-row input { width: 100%; padding-right: 68px; }
+  .password-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--teal-dark); font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 6px; }
+  .auth-row-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; font-size: 13px; }
+  .remember-label { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+  .remember-label input { margin: 0; }
+  .auth-submit { width: 100%; justify-content: center; }
+  .auth-error { background: var(--risk-bg); color: var(--risk-fg); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; margin-bottom: 16px; display: none; }
+  .auth-error.show { display: block; }
+  .auth-footnote { text-align: center; font-size: 12px; color: var(--muted-2); margin-top: 18px; }
+</style>
+</head>
+<body class="auth-body">
+
+<div class="auth-card">
+  <div class="auth-brand">
+    <span class="brand-mark" aria-hidden="true">+</span>
+    <span class="brand-name serif">NEET Rank Predictor</span>
+  </div>
+
+  <div class="auth-tabs" role="tablist">
+    <button type="button" class="auth-tab" id="tabLogin" role="tab" aria-selected="true">Log in</button>
+    <button type="button" class="auth-tab" id="tabRegister" role="tab" aria-selected="false">Create account</button>
+  </div>
+
+  <h1 class="serif" id="formTitle">Welcome back</h1>
+  <p class="sub" id="formSub">Log in to check ranks and browse colleges.</p>
+
+  <div class="auth-error" id="authError" role="alert"></div>
+
+  <form id="authForm" novalidate>
+    <div class="auth-field">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" autocomplete="username" required minlength="3">
+    </div>
+    <div class="auth-field">
+      <label for="password">Password</label>
+      <div class="password-row">
+        <input type="password" id="password" name="password" autocomplete="current-password" required minlength="8">
+        <button type="button" class="password-toggle" id="togglePassword">Show</button>
+      </div>
+    </div>
+
+    <div class="auth-row-between">
+      <label class="remember-label"><input type="checkbox" id="rememberMe"> Remember me</label>
+    </div>
+
+    <button type="submit" class="btn-primary auth-submit" id="authSubmitBtn">Log in</button>
+  </form>
+
+  <p class="auth-footnote" id="switchHint">Don't have an account? <a href="#" id="switchToRegister">Create one</a></p>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+(function () {
+  // If already logged in, skip straight past this page.
+  if (window.NeetAuth.getToken()) {
+    window.location.replace("index.html");
+  }
+
+  const BASE_URL = (window.NEET_PREDICTOR_CONFIG && window.NEET_PREDICTOR_CONFIG.API_BASE_URL) || "";
+
+  const els = {
+    tabLogin: document.getElementById("tabLogin"),
+    tabRegister: document.getElementById("tabRegister"),
+    formTitle: document.getElementById("formTitle"),
+    formSub: document.getElementById("formSub"),
+    form: document.getElementById("authForm"),
+    username: document.getElementById("username"),
+    password: document.getElementById("password"),
+    togglePassword: document.getElementById("togglePassword"),
+    rememberMe: document.getElementById("rememberMe"),
+    submitBtn: document.getElementById("authSubmitBtn"),
+    error: document.getElementById("authError"),
+    switchHint: document.getElementById("switchHint"),
+    switchToRegister: document.getElementById("switchToRegister"),
+  };
+
+  let mode = "login"; // "login" | "register"
+
+  function setMode(next) {
+    mode = next;
+    const isLogin = mode === "login";
+    els.tabLogin.setAttribute("aria-selected", String(isLogin));
+    els.tabRegister.setAttribute("aria-selected", String(!isLogin));
+    els.formTitle.textContent = isLogin ? "Welcome back" : "Create your account";
+    els.formSub.textContent = isLogin
+      ? "Log in to check ranks and browse colleges."
+      : "Takes a few seconds — just a username and password.";
+    els.password.autocomplete = isLogin ? "current-password" : "new-password";
+    els.submitBtn.textContent = isLogin ? "Log in" : "Create account";
+    els.switchHint.innerHTML = isLogin
+      ? 'Don\'t have an account? <a href="#" id="switchToRegister">Create one</a>'
+      : 'Already have an account? <a href="#" id="switchToLogin">Log in</a>';
+    els.error.classList.remove("show");
+    // Re-bind the (re-created) link inside switchHint.
+    const link = document.getElementById(isLogin ? "switchToRegister" : "switchToLogin");
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      setMode(isLogin ? "register" : "login");
+    });
+  }
+
+  els.tabLogin.addEventListener("click", () => setMode("login"));
+  els.tabRegister.addEventListener("click", () => setMode("register"));
+  els.switchToRegister.addEventListener("click", (e) => {
+    e.preventDefault();
+    setMode("register");
+  });
+
+  els.togglePassword.addEventListener("click", () => {
+    const showing = els.password.type === "text";
+    els.password.type = showing ? "password" : "text";
+    els.togglePassword.textContent = showing ? "Show" : "Hide";
+  });
+
+  function showError(msg) {
+    els.error.textContent = msg;
+    els.error.classList.add("show");
+  }
+
+  els.form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    els.error.classList.remove("show");
+
+    const username = els.username.value.trim();
+    const password = els.password.value;
+    if (username.length < 3) return showError("Username must be at least 3 characters.");
+    if (password.length < 8) return showError("Password must be at least 8 characters.");
+
+    els.submitBtn.disabled = true;
+    els.submitBtn.textContent = mode === "login" ? "Logging in…" : "Creating account…";
+
+    try {
+      const path = mode === "login" ? "/auth/login" : "/auth/register";
+      const res = await fetch(BASE_URL + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const msg =
+          res.status === 401 ? "Incorrect username or password." :
+          res.status === 409 ? "That username is already taken." :
+          data.detail || data.message || "Something went wrong. Please try again.";
+        showError(typeof msg === "string" ? msg : "Something went wrong. Please try again.");
+        return;
+      }
+
+      window.NeetAuth.setToken(data.access_token, els.rememberMe.checked);
+      window.location.replace("index.html");
+    } catch (err) {
+      showError("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      els.submitBtn.disabled = false;
+      els.submitBtn.textContent = mode === "login" ? "Log in" : "Create account";
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -24,7 +24,7 @@
     }
   }
 
-  async function request(path, { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  async function request(path, { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS, auth = true } = {}) {
     if (!BASE_URL) {
       throw new ApiError("config", "The API base URL is not configured. Check js/config.js.");
     }
@@ -32,11 +32,17 @@
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    const headers = body ? { "Content-Type": "application/json" } : {};
+    if (auth && window.NeetAuth) {
+      const token = window.NeetAuth.getToken();
+      if (token) headers["Authorization"] = "Bearer " + token;
+    }
+
     let res;
     try {
       res = await fetch(BASE_URL + path, {
         method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
+        headers,
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
@@ -59,6 +65,12 @@
       }
     }
 
+    if (res.status === 401 && auth) {
+      // Session missing or expired — send back to login rather than
+      // showing a confusing error in place.
+      if (window.NeetAuth) window.NeetAuth.logout();
+      throw new ApiError("auth", "Your session has expired. Please log in again.", payload);
+    }
     if (res.status === 404) {
       throw new ApiError("not_found", "That endpoint doesn't exist on the backend.", payload);
     }
@@ -101,6 +113,10 @@
 
     health() {
       return withRetry(() => request("/health"));
+    },
+
+    me() {
+      return request("/auth/me");
     },
 
     // Reference-data lookups that populate the filter dropdowns.
