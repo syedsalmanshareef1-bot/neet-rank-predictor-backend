@@ -140,6 +140,20 @@ nav.site-nav a:hover { color: var(--teal-dark); }
 .hero-facts { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 13.5px; color: var(--muted); }
 .hero-facts strong { color: var(--navy); font-variant-numeric: tabular-nums; }
 
+.hero { position: relative; }
+.hero-illustration { display: none; pointer-events: none; }
+@media (min-width: 940px) {
+  .hero { padding-right: 260px; }
+  .hero-illustration {
+    display: block;
+    position: absolute;
+    top: -6px;
+    right: -18px;
+    width: 300px;
+  }
+  .hero-illustration img { width: 100%; height: auto; mix-blend-mode: multiply; }
+}
+
 /* ---------- predictor card ---------- */
 .predictor-card {
   background: var(--panel);
