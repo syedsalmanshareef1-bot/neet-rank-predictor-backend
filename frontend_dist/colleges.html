@@ -47,8 +47,7 @@
   @media (max-width: 460px) { .state-grid { grid-template-columns: 1fr; } }
   .state-card { border: 1px solid #E4E0D3; border-radius: 14px; background: #fff; cursor: pointer; overflow: hidden; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; box-shadow: 0 1px 3px rgba(20,33,61,0.06); }
   .state-card:hover { border-color: #0D7377; transform: translateY(-3px); box-shadow: 0 10px 24px rgba(20,33,61,0.12); }
-  .state-card.disabled { cursor: default; }
-  .state-card.disabled:hover { border-color: #E4E0D3; transform: none; box-shadow: 0 1px 3px rgba(20,33,61,0.06); }
+  .state-card.disabled { cursor: pointer; }
   .state-card.disabled .state-card-banner { filter: grayscale(0.55); opacity: 0.55; }
   .state-card.disabled .state-name { color: #A8A498; }
   .state-card-banner { position: relative; height: 92px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -59,6 +58,9 @@
   .state-name { font-weight: 700; font-size: 14px; color: #14213D; }
   .state-count { font-size: 11.5px; color: #0D7377; margin-top: 6px; font-weight: 600; }
   .state-count.no-data { color: #A8A498; }
+  .no-data-panel { background: #fff; border: 1px solid #E4E0D3; border-radius: 12px; padding: 48px 24px; text-align: center; margin-top: 8px; }
+  .no-data-panel h2 { font-size: 20px; color: #14213D; margin: 0 0 8px; }
+  .no-data-panel p { font-size: 14px; color: #8A8878; margin: 0; }
   .back-btn { display: flex; align-items: center; gap: 6px; background: none; border: none; color: #0D7377; font-weight: 600; font-size: 14px; cursor: pointer; margin-bottom: 16px; padding: 0; font-family: inherit; }
   table { border-collapse: collapse; width: 100%; }
   th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: #5C5A50; padding: 12px 14px; border-bottom: 2px solid #E4E0D3; white-space: nowrap; position: sticky; top: 0; background: #fff; z-index: 3; box-shadow: 0 1px 0 #E4E0D3; }
@@ -330,6 +332,10 @@
     <button class="back-btn" onclick="showGrid()">&larr; All States</button>
     <h1 class="serif" id="stateTitle"></h1>
     <p class="subtitle" id="stateSubtitle"></p>
+    <div class="no-data-panel" id="noDataPanel" style="display:none;">
+      <h2 class="serif" id="noDataTitle">No data available yet</h2>
+      <p id="noDataMsg"></p>
+    </div>
 
     <div class="filter-panel">
       <div class="filter-panel-head">
@@ -32557,7 +32563,7 @@ function buildStateGrid() {
         '<div class="state-name">' + s + '</div>' +
         '<div class="state-count' + (has ? "" : " no-data") + '">' + (has ? srows.length.toLocaleString("en-IN") + " records &rarr;" : "No data yet") + '</div>' +
       '</div>';
-    if (has) card.onclick = () => openState(s);
+    card.onclick = () => openState(s);
     grid.appendChild(card);
   });
 }
@@ -32568,6 +32574,17 @@ function openState(s) {
   document.getElementById("tableView").style.display = "block";
   document.getElementById("stateTitle").textContent = s;
   const rows = stateRows(s);
+  const noData = rows.length === 0;
+  ["#tableView .filter-panel", "#tableView .legend", "#resultsCount", "#tableView .table-wrap"].forEach(sel => {
+    document.querySelector(sel).style.display = noData ? "none" : "";
+  });
+  document.getElementById("noDataPanel").style.display = noData ? "block" : "none";
+  if (noData) {
+    document.getElementById("stateSubtitle").textContent = "";
+    document.getElementById("noDataTitle").textContent = "No data available for " + s + " yet";
+    document.getElementById("noDataMsg").textContent = "Cutoff records for this state haven't been added yet. Please check back soon.";
+    return;
+  }
   document.getElementById("stateSubtitle").textContent = rows.length.toLocaleString("en-IN") + " record(s) across " + new Set(rows.map(r => r.course)).size + " course(s)";
 
   fillSelect("filterQuota", [...new Set(rows.map(r => r.quota).filter(Boolean))]);
