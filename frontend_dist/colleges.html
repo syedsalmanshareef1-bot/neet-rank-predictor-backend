@@ -310,7 +310,7 @@
     <div class="tabs">
       <button class="tab-btn active" id="tabPG" onclick="switchTab('PG')">PG Closing Rank</button>
     </div>
-    <a class="colleges-back-link" href="index.html" style="margin-left:auto;font-size:13px;font-weight:600;color:#5C5A50;text-decoration:none;white-space:nowrap;">&larr; Back to site</a>
+    <a class="colleges-back-link" href="/" style="margin-left:auto;font-size:13px;font-weight:600;color:#5C5A50;text-decoration:none;white-space:nowrap;">&larr; Back to site</a>
   </div>
 </header>
 
@@ -322,7 +322,7 @@
     <p class="subtitle" id="gridSubtitle">Click a state to view institute-wise, round-wise closing ranks.</p>
     <div class="state-grid" id="stateGrid"></div>
     <div style="margin-top:20px;" id="importLinkGrid">
-      <a class="import-btn" href="admin.html" style="display:inline-block;text-decoration:none;">Import new cutoff files (State / Round / Year)</a>
+      <a class="import-btn" href="/admin" style="display:inline-block;text-decoration:none;">Import new cutoff files (State / Round / Year)</a>
     </div>
   </div>
 
@@ -378,7 +378,7 @@
         </div>
       </div>
       <div class="filter-panel-footer" id="importLinkFilter">
-        <a class="import-btn" href="admin.html" style="display:inline-block;text-decoration:none;">Import more data</a>
+        <a class="import-btn" href="/admin" style="display:inline-block;text-decoration:none;">Import more data</a>
       </div>
     </div>
 
@@ -32405,7 +32405,7 @@ function updateNoticeAndFooter() {
   const rows = activeRows();
   const notice = document.getElementById("dataNotice");
   const footer = document.getElementById("footerText");
-  notice.innerHTML = '<span style="font-size:16px;">i</span><p><strong>Real data, round-wise where sourced, drawn from the shared Master Dataset:</strong> Columns only appear when a real round-specific number exists. New cutoff files uploaded via the <a href="admin.html">Admin Dashboard</a> for a matching college/course/category/quota are merged straight into these same rows — new years/rounds just add columns. <b>' + rows.length.toLocaleString("en-IN") + '</b> real records across <b>' + new Set(rows.map(r => r.state)).size + '</b> states loaded. Nothing is invented.</p>';
+  notice.innerHTML = '<span style="font-size:16px;">i</span><p><strong>Real data, round-wise where sourced, drawn from the shared Master Dataset:</strong> Columns only appear when a real round-specific number exists. New cutoff files uploaded via the <a href="/admin">Admin Dashboard</a> for a matching college/course/category/quota are merged straight into these same rows — new years/rounds just add columns. <b>' + rows.length.toLocaleString("en-IN") + '</b> real records across <b>' + new Set(rows.map(r => r.state)).size + '</b> states loaded. Nothing is invented.</p>';
   footer.textContent = "Sources: MCC NEET-PG round-wise seat allotment results and state counselling authorities (e.g. KEA), as compiled by Careers360, plus anything you import. Verify current figures at mcc.nic.in / your state DME or KEA site before making decisions.";
 }
 

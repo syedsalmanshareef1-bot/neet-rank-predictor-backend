@@ -25,13 +25,13 @@
 
   function requireAuth() {
     if (!getToken()) {
-      window.location.replace("login.html");
+      window.location.replace("/login");
     }
   }
 
   function logout() {
     clearToken();
-    window.location.replace("login.html");
+    window.location.replace("/login");
   }
 
   window.NeetAuth = { getToken, setToken, clearToken, requireAuth, logout };

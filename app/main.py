@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -70,6 +70,33 @@ def admin_page():
 def login_page():
     """Lets /login work without typing the .html extension."""
     return FileResponse("frontend_dist/login.html")
+
+
+@app.get("/college", include_in_schema=False)
+def college_page():
+    """Serves the colleges page at the clean URL /college."""
+    return FileResponse("frontend_dist/colleges.html")
+
+
+# Old .html URLs (bookmarks, shared links) permanently redirect to the clean
+# URLs so the address bar never shows ".html". Query strings are preserved.
+_CLEAN_URLS = {
+    "/index.html": "/",
+    "/login.html": "/login",
+    "/colleges.html": "/college",
+    "/admin.html": "/admin",
+}
+
+
+def _make_redirect(target: str):
+    def _redirect(request: Request):
+        query = request.url.query
+        return RedirectResponse(target + (f"?{query}" if query else ""), status_code=301)
+    return _redirect
+
+
+for _old_path, _new_path in _CLEAN_URLS.items():
+    app.add_api_route(_old_path, _make_redirect(_new_path), methods=["GET"], include_in_schema=False)
 
 
 # ---------------------------------------------------------------------------

@@ -269,7 +269,7 @@
   // ==================================================== nav scrolling
   // Only one in-page view exists here now (the predictor). "Predictor",
   // "How it works" and "Admission info" all scroll within it. "Colleges"
-  // is a normal link to colleges.html — left alone, not intercepted.
+  // is a normal link to /college — left alone, not intercepted.
   const navLinks = document.querySelectorAll("a[data-view]");
 
   navLinks.forEach((a) => {

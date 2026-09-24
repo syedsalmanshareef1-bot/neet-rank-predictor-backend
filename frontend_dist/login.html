@@ -108,7 +108,7 @@
 (function () {
   // If already logged in, skip straight past this page.
   if (window.NeetAuth.getToken()) {
-    window.location.replace("index.html");
+    window.location.replace("/");
   }
 
   const BASE_URL = (window.NEET_PREDICTOR_CONFIG && window.NEET_PREDICTOR_CONFIG.API_BASE_URL) || "";
@@ -203,7 +203,7 @@
       }
 
       window.NeetAuth.setToken(data.access_token, els.rememberMe.checked);
-      window.location.replace("index.html");
+      window.location.replace("/");
     } catch (err) {
       showError("Couldn't reach the server. Check your connection and try again.");
     } finally {
