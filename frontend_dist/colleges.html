@@ -287,6 +287,34 @@
     .filter-panel { padding: 14px; }
     #tableView tbody tr { padding: 14px; }
   }
+  /* ============================================================
+     RESULTS BAR + PDF DOWNLOAD + MOBILE "SHOW MORE"
+     ============================================================ */
+  .results-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .results-bar #resultsCount { margin-bottom: 0; }
+  .pdf-btn { display: inline-flex; align-items: center; gap: 8px; background: #0D7377; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; box-shadow: 0 1px 2px rgba(20,33,61,0.12); }
+  .pdf-btn:hover { background: #0A5D61; }
+  .pdf-btn:disabled { opacity: 0.65; cursor: progress; }
+  .pdf-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .pdf-note { font-size: 12px; color: #8A8878; margin: -4px 0 12px; }
+  .pdf-toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #14213D; color: #fff; padding: 11px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; z-index: 50; box-shadow: 0 8px 24px rgba(20,33,61,0.25); max-width: min(520px, calc(100% - 32px)); text-align: center; line-height: 1.45; }
+  .pdf-toast small { display: block; font-weight: 500; opacity: 0.8; font-size: 11.5px; overflow-wrap: anywhere; }
+  .pdf-toast.err { background: #A13D2F; }
+  .show-more-wrap { text-align: center; margin-top: 6px; }
+  .show-more-btn { background: #fff; border: 1.5px solid #0D7377; color: #0D7377; font-weight: 700; font-size: 14px; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-family: inherit; width: 100%; max-width: 420px; min-height: 46px; }
+  .show-more-btn:hover { background: #EAF2F1; }
+  .show-more-meta { font-size: 12px; color: #8A8878; margin-top: 8px; }
+  @media (max-width: 1023px) {
+    .results-bar { position: sticky; top: 0; z-index: 5; background: #F6F5F1; padding: 10px 0; margin-bottom: 8px; }
+    .pdf-btn { padding: 11px 16px; min-height: 44px; font-size: 14px; }
+  }
+  @media (max-width: 480px) {
+    .results-bar { flex-direction: column; align-items: stretch; }
+    .pdf-btn { justify-content: center; width: 100%; }
+  }
+  /* Mobile/tablet: header is not sticky here so the sticky results bar
+     (with the PDF button) can sit at the very top while scrolling cards. */
+  @media (max-width: 1023px) { header { position: static; } }
 </style>
 </head>
 <body>
@@ -346,7 +374,7 @@
       <div class="filter-grid-new">
         <div class="filter-field wide">
           <label for="filterInstitute">Institute or course</label>
-          <input type="text" id="filterInstitute" placeholder="Search by name..." oninput="renderTable()">
+          <input type="text" id="filterInstitute" placeholder="Search by name..." oninput="scheduleRenderTable()">
         </div>
         <div class="filter-field">
           <label for="filterQuota">Quota</label>
@@ -388,13 +416,21 @@
       <span><span class="dot" style="background:#DFF3E6;"></span>Least competitive third</span>
       <span>(colour scale is relative to each round column, recalculated per view)</span>
     </div>
-    <div id="resultsCount"></div>
+    <div class="results-bar">
+      <div id="resultsCount"></div>
+      <button type="button" class="pdf-btn" id="pdfBtn" onclick="downloadStatePdf()" title="Download every result matching your current filters as a PDF">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span id="pdfBtnLabel">Download PDF</span>
+      </button>
+    </div>
+    <p class="pdf-note" id="pdfNote">The PDF includes every result matching your filters &mdash; not just the ones shown on screen.</p>
     <div class="table-wrap">
       <table>
         <thead id="tableHead"></thead>
         <tbody id="tableBody"></tbody>
       </table>
     </div>
+    <div class="show-more-wrap" id="showMoreWrap" style="display:none;"></div>
   </div>
 
   <div id="importView" style="display:none;">
@@ -31277,6 +31313,9 @@ function chunkString(str, size) {
 async function saveMasterSnapshot() {
   // Coalesce rapid-fire saves (e.g. several conflict resolutions in a row)
   // into a single in-flight write instead of racing multiple writes.
+  // No storage backend on the real website: don't serialize ~10 MB of JSON
+  // for nothing (this was a big memory/CPU hit on phones).
+  if (!window.storage || typeof window.storage.set !== "function") return;
   if (masterSaveInFlight) { masterSaveQueued = true; return masterSaveInFlight; }
   masterSaveInFlight = (async () => {
     setSaveIndicator("saving");
@@ -31361,6 +31400,10 @@ async function restoreMasterBackupFromFile(file) {
 // its storage key prefix. Returns { records, chunkCount }, or null if
 // nothing usable is stored under that key (including "key doesn't exist yet").
 async function loadSnapshotByKey(storageKey) {
+  // window.storage only exists inside Claude's artifact preview. On the real
+  // website it's undefined, so skip straight to the built-in data instead of
+  // throwing + retrying (which added ~1s of dead time on every page load).
+  if (!window.storage || typeof window.storage.get !== "function") return null;
   const metaResult = await withRetry(() => window.storage.get(storageKey + "-meta", false), 2);
   if (!metaResult || !metaResult.value) return null;
   const meta = JSON.parse(metaResult.value);
@@ -32573,7 +32616,7 @@ function openState(s) {
   document.getElementById("stateTitle").textContent = s;
   const rows = stateRows(s);
   const noData = rows.length === 0;
-  ["#tableView .filter-panel", "#tableView .legend", "#resultsCount", "#tableView .table-wrap"].forEach(sel => {
+  ["#tableView .filter-panel", "#tableView .legend", "#tableView .results-bar", "#pdfNote", "#tableView .table-wrap", "#showMoreWrap"].forEach(sel => {
     document.querySelector(sel).style.display = noData ? "none" : "";
   });
   document.getElementById("noDataPanel").style.display = noData ? "block" : "none";
@@ -32597,78 +32640,151 @@ function openState(s) {
   document.getElementById("filterInstitute").value = "";
 
   renderTable();
+  scrollToTopOfView();
+}
+
+function scrollToTopOfView() {
+  // Without this, tapping a state lower down the grid left the page scrolled
+  // half-way down the new view — on phones it looked like nothing opened.
+  try { window.scrollTo({ top: 0, behavior: "auto" }); } catch (e) { window.scrollTo(0, 0); }
 }
 
 function showGrid() {
   buildStateGrid();
   document.getElementById("gridView").style.display = "block";
   document.getElementById("tableView").style.display = "none";
+  const wasInState = currentState !== null;
   currentState = null;
+  lastStateView = null;
+  if (wasInState) scrollToTopOfView();
 }
 
-function renderTable() {
-  if (!currentState) return;
+// ------------------------------------------------------------
+// State table: filtering is shared by the on-screen table AND the PDF export,
+// so the PDF always contains exactly what the filters select.
+// ------------------------------------------------------------
+const COMPACT_MQ = window.matchMedia("(max-width: 1023px)");
+const COMPACT_BATCH = 50;        // cards drawn per batch on phones/tablets
+let compactRenderLimit = COMPACT_BATCH;
+let lastStateView = null;
+let renderTimer = null;
+
+function isCompact() { return COMPACT_MQ.matches; }
+
+// Typing in the search box used to redraw every card on every keystroke
+// (~10 s per key on a mid-range phone). Wait until typing pauses.
+function scheduleRenderTable() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(renderTable, isCompact() ? 300 : 120);
+}
+
+function currentTableFilters() {
+  const val = id => document.getElementById(id).value;
+  return {
+    quota: val("filterQuota"), course: val("filterCourse"), category: val("filterCategory"),
+    authority: val("filterAuthority"), exam: val("filterExam"), year: val("filterYear"),
+    round: val("filterRound"), text: val("filterInstitute").trim(),
+  };
+}
+
+function computeStateView() {
+  const f = currentTableFilters();
   let rows = stateRows(currentState);
-  const q = document.getElementById("filterQuota").value;
-  const c = document.getElementById("filterCourse").value;
-  const cat = document.getElementById("filterCategory").value;
-  const au = document.getElementById("filterAuthority").value;
-  const ex = document.getElementById("filterExam").value;
-  const yr = document.getElementById("filterYear").value;
-  const rd = document.getElementById("filterRound").value;
-  const text = document.getElementById("filterInstitute").value.toLowerCase();
-  if (q) rows = rows.filter(r => r.quota === q);
-  if (c) rows = rows.filter(r => r.course === c);
-  if (cat) rows = rows.filter(r => r.category === cat);
-  if (au) rows = rows.filter(r => r.authority === au);
-  if (ex) rows = rows.filter(r => r.exam === ex);
-  if (yr) rows = rows.filter(r => Object.keys(r.rounds).some(k => roundKeyParts(k).year === yr));
-  if (rd) rows = rows.filter(r => Object.keys(r.rounds).some(k => roundKeyParts(k).round === rd));
+  const text = f.text.toLowerCase();
+  if (f.quota) rows = rows.filter(r => r.quota === f.quota);
+  if (f.course) rows = rows.filter(r => r.course === f.course);
+  if (f.category) rows = rows.filter(r => r.category === f.category);
+  if (f.authority) rows = rows.filter(r => r.authority === f.authority);
+  if (f.exam) rows = rows.filter(r => r.exam === f.exam);
+  if (f.year) rows = rows.filter(r => Object.keys(r.rounds).some(k => roundKeyParts(k).year === f.year));
+  if (f.round) rows = rows.filter(r => Object.keys(r.rounds).some(k => roundKeyParts(k).round === f.round));
   if (text) rows = rows.filter(r => r.institute.toLowerCase().includes(text) || (r.course || "").toLowerCase().includes(text));
 
   const allRoundKeysRT = new Set();
-  rows.forEach(r => Object.keys(r.rounds).forEach(k => { if ((!yr || roundKeyParts(k).year === yr) && (!rd || roundKeyParts(k).round === rd)) allRoundKeysRT.add(k); }));
+  rows.forEach(r => Object.keys(r.rounds).forEach(k => { if ((!f.year || roundKeyParts(k).year === f.year) && (!f.round || roundKeyParts(k).round === f.round)) allRoundKeysRT.add(k); }));
   const roundKeysPresent = sortRoundKeys([...allRoundKeysRT]);
 
   const colStats = {};
   roundKeysPresent.forEach(k => {
-    const vals = rows.map(r => r.rounds[k] ? r.rounds[k].close : null).filter(v => v != null);
-    colStats[k] = { min: Math.min(...vals), max: Math.max(...vals) };
+    let min = Infinity, max = -Infinity;
+    rows.forEach(r => { const v = r.rounds[k] ? r.rounds[k].close : null; if (v != null) { if (v < min) min = v; if (v > max) max = v; } });
+    colStats[k] = { min, max };
   });
 
-  rows = rows.slice().sort((a, b) => {
-    const av = Math.min(...Object.values(a.rounds).map(v => v.close).filter(v => v != null), Infinity);
-    const bv = Math.min(...Object.values(b.rounds).map(v => v.close).filter(v => v != null), Infinity);
-    return av - bv;
+  // Pre-compute each row's best closing rank once (the old sort recomputed it
+  // on every comparison, which is slow with thousands of rows).
+  const best = new Map();
+  rows.forEach(r => {
+    let m = Infinity;
+    Object.values(r.rounds).forEach(v => { if (v && v.close != null && v.close < m) m = v.close; });
+    best.set(r, m);
   });
+  rows = rows.slice().sort((a, b) => best.get(a) - best.get(b));
 
-  document.getElementById("resultsCount").textContent = rows.length.toLocaleString("en-IN") + " result(s)";
+  return { state: currentState, rows, roundKeysPresent, colStats, hasCutoffQuota: rows.some(r => r.cutoffQuota), filters: f };
+}
+
+function stateRowHtml(r, view) {
+  const cells = view.roundKeysPresent.map(k => {
+    const lbl = roundLabel(k);
+    const v = r.rounds[k] ? r.rounds[k].close : null;
+    if (v == null) return '<td class="round-cell rank-empty" data-label="' + lbl + '">-</td>';
+    const stat = view.colStats[k];
+    const color = heatColor(v, stat.min, stat.max);
+    return '<td class="round-cell" data-label="' + lbl + '"><span class="rank-pill" style="background:' + color.bg + ';color:' + color.fg + ';">' + v.toLocaleString("en-IN") + '</span></td>';
+  }).join("");
+  const cutoffQuotaCell = view.hasCutoffQuota ? '<td data-label="Cutoff Quota">' + (r.cutoffQuota || "-") + '</td>' : "";
+  const feeCell = '<td data-label="Fees">' + formatFeeDisplay(r.fee) + '</td>';
+  return '<tr><td class="sticky-col col-quota" data-label="Quota"><span class="quota-pill">' + naField(r.quota) + '</span></td><td class="sticky-col col-institute institute-cell" style="font-weight:600;">' + r.institute + '</td><td data-label="Course">' + naField(r.course) + '</td>' + cutoffQuotaCell + '<td data-label="Category">' + naField(r.category) + '</td>' + feeCell + cells + '</tr>';
+}
+
+function renderTable() {
+  if (!currentState) return;
+  clearTimeout(renderTimer);
+  const view = computeStateView();
+  lastStateView = view;
+  compactRenderLimit = COMPACT_BATCH;
+
+  const total = view.rows.length;
+  document.getElementById("resultsCount").textContent = total.toLocaleString("en-IN") + " result(s)";
   updateActiveFilterCount();
+  updatePdfButton(total);
 
-  const hasCutoffQuota = rows.some(r => r.cutoffQuota);
-
-  const thead = document.getElementById("tableHead");
-  thead.innerHTML = "<tr><th class=\"sticky-col col-quota\">Quota</th><th class=\"sticky-col col-institute\">Institute</th><th>Course</th>" +
-    (hasCutoffQuota ? "<th>Cutoff Quota</th>" : "") +
+  document.getElementById("tableHead").innerHTML = "<tr><th class=\"sticky-col col-quota\">Quota</th><th class=\"sticky-col col-institute\">Institute</th><th>Course</th>" +
+    (view.hasCutoffQuota ? "<th>Cutoff Quota</th>" : "") +
     "<th>Category</th><th>Fees</th>" +
-    roundKeysPresent.map(k => '<th class="round-col">' + roundLabel(k) + '</th>').join("") +
+    view.roundKeysPresent.map(k => '<th class="round-col">' + roundLabel(k) + '</th>').join("") +
     "</tr>";
 
-  const tbody = document.getElementById("tableBody");
-  tbody.innerHTML = rows.map(r => {
-    const cells = roundKeysPresent.map(k => {
-      const lbl = roundLabel(k);
-      const v = r.rounds[k] ? r.rounds[k].close : null;
-      if (v == null) return '<td class="round-cell rank-empty" data-label="' + lbl + '">-</td>';
-      const stat = colStats[k];
-      const color = heatColor(v, stat.min, stat.max);
-      return '<td class="round-cell" data-label="' + lbl + '"><span class="rank-pill" style="background:' + color.bg + ';color:' + color.fg + ';">' + v.toLocaleString("en-IN") + '</span></td>';
-    }).join("");
-    const cutoffQuotaCell = hasCutoffQuota ? '<td data-label="Cutoff Quota">' + (r.cutoffQuota || "-") + '</td>' : "";
-    const feeCell = '<td data-label="Fees">' + formatFeeDisplay(r.fee) + '</td>';
-    return '<tr><td class="sticky-col col-quota" data-label="Quota"><span class="quota-pill">' + naField(r.quota) + '</span></td><td class="sticky-col col-institute institute-cell" style="font-weight:600;">' + r.institute + '</td><td data-label="Course">' + naField(r.course) + '</td>' + cutoffQuotaCell + '<td data-label="Category">' + naField(r.category) + '</td>' + feeCell + cells + '</tr>';
-  }).join("");
+  // Desktop keeps the full scrollable table exactly as before. Phones/tablets
+  // draw cards in batches so the page stays responsive.
+  const shown = isCompact() ? Math.min(total, compactRenderLimit) : total;
+  document.getElementById("tableBody").innerHTML = view.rows.slice(0, shown).map(r => stateRowHtml(r, view)).join("");
+  updateShowMore(shown, total);
 }
+
+function showMoreRows() {
+  const view = lastStateView;
+  if (!view) return;
+  const from = compactRenderLimit;
+  compactRenderLimit = Math.min(view.rows.length, compactRenderLimit + COMPACT_BATCH);
+  document.getElementById("tableBody").insertAdjacentHTML("beforeend", view.rows.slice(from, compactRenderLimit).map(r => stateRowHtml(r, view)).join(""));
+  updateShowMore(compactRenderLimit, view.rows.length);
+}
+
+function updateShowMore(shown, total) {
+  const wrap = document.getElementById("showMoreWrap");
+  if (shown >= total) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+  const next = Math.min(COMPACT_BATCH, total - shown);
+  wrap.style.display = "block";
+  wrap.innerHTML = '<button type="button" class="show-more-btn" onclick="showMoreRows()">Show ' + next + ' more</button>' +
+    '<div class="show-more-meta">Showing ' + shown.toLocaleString("en-IN") + ' of ' + total.toLocaleString("en-IN") + ' &middot; the PDF always includes all ' + total.toLocaleString("en-IN") + '</div>';
+}
+
+// Crossing the phone/desktop breakpoint (rotating a tablet, resizing a window)
+// re-renders so each layout gets its own behaviour.
+if (COMPACT_MQ.addEventListener) COMPACT_MQ.addEventListener("change", () => { if (currentState) renderTable(); });
+else if (COMPACT_MQ.addListener) COMPACT_MQ.addListener(() => { if (currentState) renderTable(); });
 
 function clearTableFilters() {
   ["filterQuota", "filterCourse", "filterCategory", "filterAuthority", "filterExam", "filterYear", "filterRound"].forEach(id => {
@@ -32689,6 +32805,282 @@ function updateActiveFilterCount() {
 function formatFeeDisplay(fee) {
   if (fee == null) return '<span class="rank-empty">-</span>';
   return "₹" + Number(fee).toLocaleString("en-IN") + "*";
+}
+
+// ============================================================
+// PDF DOWNLOAD — per state, respects every active filter, no limits.
+// Library files are bundled locally in js/vendor/ (no CDN dependency)
+// and only loaded the first time someone taps "Download PDF".
+// ============================================================
+let pdfLibPromise = null;
+let pdfBusy = false;
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("Could not load " + src));
+    document.head.appendChild(s);
+  });
+}
+
+function loadPdfLib() {
+  const ready = () => window.jspdf && window.jspdf.jsPDF && typeof window.jspdf.jsPDF.API.autoTable === "function";
+  if (ready()) return Promise.resolve();
+  if (!pdfLibPromise) {
+    pdfLibPromise = loadScriptOnce("js/vendor/jspdf.umd.min.js")
+      .then(() => loadScriptOnce("js/vendor/jspdf.plugin.autotable.min.js"))
+      .then(() => { if (!ready()) throw new Error("PDF library failed to initialise"); })
+      .catch(err => { pdfLibPromise = null; throw err; });
+  }
+  return pdfLibPromise;
+}
+
+function updatePdfButton(total) {
+  const btn = document.getElementById("pdfBtn");
+  const label = document.getElementById("pdfBtnLabel");
+  if (!btn || pdfBusy) return;
+  btn.disabled = total === 0;
+  label.textContent = total === 0 ? "No results to download" : "Download PDF (" + total.toLocaleString("en-IN") + ")";
+}
+
+function showPdfToast(msg, isErr) {
+  let t = document.getElementById("pdfToast");
+  if (!t) { t = document.createElement("div"); t.id = "pdfToast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
+  t.className = "pdf-toast" + (isErr ? " err" : "");
+  t.textContent = msg;
+  if (arguments[2]) { const sm = document.createElement("small"); sm.textContent = arguments[2]; t.appendChild(sm); }
+  t.style.display = "block";
+  clearTimeout(showPdfToast._timer);
+  showPdfToast._timer = setTimeout(() => { t.style.display = "none"; }, isErr ? 6000 : 3500);
+}
+
+// The built-in PDF fonts only cover Latin-1, so map the few common
+// non-Latin-1 characters to safe equivalents instead of printing garbage.
+function pdfText(v) {
+  if (v == null || v === "") return "-";
+  return String(v)
+    .replace(/[\u2013\u2014\u2212]/g, "-")
+    .replace(/[\u2018\u2019\u201B]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/\u2026/g, "...")
+    .replace(/\u20B9/g, "Rs. ")
+    .replace(/[\u00A0\u2007\u202F]/g, " ")
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "")
+    .trim() || "-";
+}
+
+// Turns a label into a clean, cross-platform filename piece
+// (no spaces, slashes, colons, quotes, etc. — safe on Windows, Mac, Android, iOS).
+function fileSafe(v) {
+  return String(v)
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/\+/g, " plus ")
+    .replace(/[^A-Za-z0-9()\-. ]+/g, " ")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "");
+}
+
+function localDateStamp(d) {
+  const pad = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+
+function examLabelFor(view) {
+  if (view.filters.exam) return view.filters.exam;
+  const exams = [...new Set(view.rows.map(r => r.exam).filter(Boolean))];
+  return exams.length === 1 ? exams[0] : "NEET";
+}
+
+// e.g. Karnataka_NEET-PG_Closing-Ranks_All-Records_2026-09-25.pdf
+//      Tamil-Nadu_NEET-PG_Closing-Ranks_MD-General-Medicine_OBC_State-Quota_2025-R1_2026-09-25.pdf
+function buildPdfFileName(view) {
+  const f = view.filters;
+  const parts = [fileSafe(view.state), fileSafe(examLabelFor(view)), "Closing-Ranks"];
+  const filterParts = [];
+  if (f.course) filterParts.push(fileSafe(f.course));
+  if (f.category) filterParts.push(fileSafe(f.category));
+  if (f.quota) filterParts.push(fileSafe(f.quota));
+  if (f.authority) filterParts.push(fileSafe(f.authority));
+  if (f.year && f.round) filterParts.push(fileSafe(f.year + "-" + f.round));
+  else if (f.year) filterParts.push(fileSafe(f.year));
+  else if (f.round) filterParts.push(fileSafe("Round-" + f.round));
+  if (f.text) filterParts.push("Search-" + fileSafe(f.text).slice(0, 30));
+  parts.push(...(filterParts.length ? filterParts.filter(Boolean) : ["All-Records"]));
+  let name = parts.filter(Boolean).join("_");
+  if (name.length > 170) name = name.slice(0, 170).replace(/[-_.]+$/, "");
+  return name + "_" + localDateStamp(new Date()) + ".pdf";
+}
+
+function describeFilters(f) {
+  const out = [];
+  if (f.course) out.push("Course: " + f.course);
+  if (f.category) out.push("Category: " + f.category);
+  if (f.quota) out.push("Quota: " + f.quota);
+  if (f.authority) out.push("Authority: " + f.authority);
+  if (f.exam) out.push("Exam: " + f.exam);
+  if (f.year) out.push("Year: " + f.year);
+  if (f.round) out.push("Round: " + f.round);
+  if (f.text) out.push('Search: "' + f.text + '"');
+  return out.length ? out.join("   |   ") : "None - all records for this state";
+}
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function saveBlobAs(blob, filename) {
+  // Works on desktop, Android and iOS (13+). The object URL is kept alive for
+  // a minute because some mobile browsers read it after click() returns.
+  if (window.navigator && typeof window.navigator.msSaveOrOpenBlob === "function") {
+    window.navigator.msSaveOrOpenBlob(blob, filename); return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.rel = "noopener"; a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 60000);
+}
+
+function buildStatePdf(view) {
+  const { jsPDF } = window.jspdf;
+  const baseCols = 5 + (view.hasCutoffQuota ? 1 : 0);
+  const totalCols = baseCols + view.roundKeysPresent.length;
+  // Wide tables (many rounds) go on A3 so round columns never get squashed.
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: totalCols > 13 ? "a3" : "a4", compress: true });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const M = 10;
+  const generated = new Date();
+  const examLbl = examLabelFor(view);
+  const title = view.state + " - " + examLbl + " Closing Ranks";
+
+  doc.setProperties({ title: title, subject: "Institute-wise, round-wise closing ranks", creator: "NEET Rank Predictor", author: "NEET Rank Predictor" });
+
+  // ---- first-page header
+  doc.setFillColor(13, 115, 119);
+  doc.rect(0, 0, pageW, 3, "F");
+  doc.setTextColor(20, 33, 61);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(17);
+  doc.text(pdfText(title), M, 14);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(92, 90, 80);
+  const filterLines = doc.splitTextToSize(pdfText("Filters: " + describeFilters(view.filters)), pageW - 2 * M);
+  doc.text(filterLines, M, 20);
+  let y = 20 + filterLines.length * 4.2;
+  doc.text(pdfText(view.rows.length.toLocaleString("en-IN") + " result(s)   |   Generated " +
+    generated.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })), M, y);
+  y += 4.2;
+  // colour legend (same scale as the website)
+  const legend = [["#FBE0DC", "Most competitive third"], ["#FDF0C8", "Middle third"], ["#DFF3E6", "Least competitive third"]];
+  let lx = M;
+  doc.setFontSize(8);
+  legend.forEach(([c, lbl]) => {
+    doc.setFillColor(...hexToRgb(c)); doc.rect(lx, y - 2.6, 3.2, 3.2, "F");
+    doc.setTextColor(92, 90, 80); doc.text(lbl, lx + 4.4, y);
+    lx += 6 + doc.getTextWidth(lbl) + 6;
+  });
+  doc.text("(scale is relative to each round column)", lx, y);
+  y += 4;
+
+  // ---- table
+  const head = ["Quota", "Institute", "Course"].concat(view.hasCutoffQuota ? ["Cutoff Quota"] : [], ["Category", "Fees"], view.roundKeysPresent.map(roundLabel));
+  const firstRoundCol = baseCols;
+  const body = view.rows.map(r => {
+    const base = [pdfText(r.quota), pdfText(r.institute), pdfText(r.course)];
+    if (view.hasCutoffQuota) base.push(pdfText(r.cutoffQuota));
+    base.push(pdfText(r.category), r.fee == null ? "-" : "Rs. " + Number(r.fee).toLocaleString("en-IN"));
+    view.roundKeysPresent.forEach(k => { const v = r.rounds[k] ? r.rounds[k].close : null; base.push(v == null ? "-" : v.toLocaleString("en-IN")); });
+    return base;
+  });
+
+  const usable = pageW - 2 * M;
+  const colStyles = {
+    0: { cellWidth: Math.min(30, usable * 0.09) },
+    1: { cellWidth: Math.min(78, usable * 0.24), fontStyle: "bold" },
+    2: { cellWidth: Math.min(42, usable * 0.13) },
+  };
+  let ci = 3;
+  if (view.hasCutoffQuota) colStyles[ci++] = { cellWidth: Math.min(26, usable * 0.08) };
+  colStyles[ci++] = { cellWidth: Math.min(22, usable * 0.07) };             // category
+  colStyles[ci++] = { cellWidth: Math.min(22, usable * 0.07), halign: "right" }; // fees
+  for (let i = firstRoundCol; i < head.length; i++) colStyles[i] = { halign: "center" };
+
+  const roundKeys = view.roundKeysPresent;
+  doc.autoTable({
+    head: [head],
+    body: body,
+    startY: y + 1,
+    margin: { left: M, right: M, top: 12, bottom: 14 },
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 7.4, cellPadding: 1.6, lineColor: [228, 224, 211], lineWidth: 0.15, textColor: [20, 33, 61], overflow: "linebreak", valign: "middle" },
+    headStyles: { fillColor: [20, 33, 61], textColor: 255, fontStyle: "bold", fontSize: 7.6, halign: "left" },
+    alternateRowStyles: { fillColor: [250, 249, 245] },
+    columnStyles: colStyles,
+    showHead: "everyPage",
+    rowPageBreak: "avoid",
+    didParseCell: data => {
+      if (data.section === "head" && data.column.index >= firstRoundCol) data.cell.styles.halign = "center";
+      if (data.section !== "body" || data.column.index < firstRoundCol) return;
+      const k = roundKeys[data.column.index - firstRoundCol];
+      const r = view.rows[data.row.index];
+      const v = r && r.rounds[k] ? r.rounds[k].close : null;
+      if (v == null) { data.cell.styles.textColor = [201, 198, 186]; return; }
+      const c = heatColor(v, view.colStats[k].min, view.colStats[k].max);
+      data.cell.styles.fillColor = hexToRgb(c.bg);
+      data.cell.styles.textColor = hexToRgb(c.fg);
+      data.cell.styles.fontStyle = "bold";
+    },
+  });
+
+  // ---- running header (pages 2+) and footer with page numbers on every page
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    if (i > 1) {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(20, 33, 61);
+      doc.text(pdfText(title), M, 8);
+    }
+    doc.setDrawColor(228, 224, 211); doc.setLineWidth(0.2);
+    doc.line(M, pageH - 10, pageW - M, pageH - 10);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7.2); doc.setTextColor(138, 136, 120);
+    doc.text("NEET Rank Predictor  |  Historical closing ranks - indicative only. Verify at mcc.nic.in / your state counselling authority before making decisions.", M, pageH - 6);
+    doc.text("Page " + i + " of " + pages, pageW - M, pageH - 6, { align: "right" });
+  }
+  return doc;
+}
+
+async function downloadStatePdf() {
+  if (pdfBusy) return;
+  if (!currentState) return;
+  const view = computeStateView();   // always fresh: exactly what the filters select right now
+  if (view.rows.length === 0) { showPdfToast("No results match these filters - nothing to download.", true); return; }
+
+  const btn = document.getElementById("pdfBtn");
+  const label = document.getElementById("pdfBtnLabel");
+  pdfBusy = true;
+  btn.disabled = true;
+  label.textContent = view.rows.length > 1500 ? "Preparing PDF... (large, please wait)" : "Preparing PDF...";
+  try {
+    await loadPdfLib();
+    await new Promise(res => setTimeout(res, 40)); // let the button repaint before the heavy work
+    const doc = buildStatePdf(view);
+    const fileName = buildPdfFileName(view);
+    saveBlobAs(doc.output("blob"), fileName);
+    showPdfToast("PDF downloaded", false, fileName);
+  } catch (err) {
+    console.error("PDF export failed:", err);
+    showPdfToast("Could not create the PDF (" + (err && err.message ? err.message : "unknown error") + "). Please try again.", true);
+  } finally {
+    pdfBusy = false;
+    updatePdfButton(lastStateView ? lastStateView.rows.length : view.rows.length);
+  }
 }
 
 initMasterData().then(async () => {

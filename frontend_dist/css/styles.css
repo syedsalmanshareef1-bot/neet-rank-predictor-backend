@@ -101,6 +101,41 @@ nav.site-nav a:hover { color: var(--teal-dark); }
   nav.site-nav { display: flex; }
 }
 
+/* Phones: the nav used to be hidden entirely, so there was no way to reach
+   the Colleges page. Show it as its own full-width row under the brand,
+   with Colleges as a clear tappable button. Scrolls sideways if needed. */
+@media (max-width: 759px) {
+  nav.site-nav {
+    display: flex;
+    order: 3;
+    width: 100%;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 0 2px;
+  }
+  nav.site-nav::-webkit-scrollbar { display: none; }
+  nav.site-nav a {
+    flex-shrink: 0;
+    font-size: 13.5px;
+    padding: 9px 14px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--panel);
+    white-space: nowrap;
+  }
+  nav.site-nav a.nav-colleges {
+    background: var(--teal);
+    border-color: var(--teal);
+    color: #fff;
+  }
+  nav.site-nav a.nav-colleges:hover { background: var(--teal-dark); color: #fff; }
+}
+
 .status-pill {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 600; color: var(--muted);
