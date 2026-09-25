@@ -19,6 +19,7 @@ from app.schemas import (
 from app.security import create_access_token, verify_password
 from app.services.file_parsers import parse_upload
 from app.services.import_service import import_rows
+from app.routers.meta import invalidate_cutoffs_cache
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -127,6 +128,7 @@ async def import_file(
     )
     import_log.finished_at = datetime.now(timezone.utc)
     db.commit()
+    invalidate_cutoffs_cache()
     db.refresh(import_log)
 
     return ImportSummary(
@@ -246,4 +248,5 @@ def resolve_conflict(
     conflict.resolved_by = admin.username
     conflict.resolved_at = datetime.now(timezone.utc)
     db.commit()
+    invalidate_cutoffs_cache()
     return {"status": "resolved", "resolution": conflict.resolution}

@@ -1,6 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
+from pydantic import TypeAdapter
 from sqlalchemy.orm import Session, joinedload
 
 from app import models
@@ -9,6 +10,18 @@ from app.deps import get_current_user
 from app.schemas import CollegeItem, CutoffBrowseRound, CutoffBrowseRow, NamedItem, RoundItem, YearItem
 
 router = APIRouter(tags=["reference data"], dependencies=[Depends(get_current_user)])
+
+# /cutoffs returns every record (~28k rows, ~11 MB of JSON) and takes several
+# seconds to build, so the finished JSON is kept in memory and reused. Any
+# admin import or conflict resolution clears it (see routers/admin.py), so
+# the next request rebuilds it with the new data.
+_cutoffs_json: Optional[bytes] = None
+_cutoffs_adapter = TypeAdapter(list[CutoffBrowseRow])
+
+
+def invalidate_cutoffs_cache() -> None:
+    global _cutoffs_json
+    _cutoffs_json = None
 
 
 @router.get("/exams", response_model=list[NamedItem])
@@ -90,6 +103,10 @@ def list_cutoffs(db: Session = Depends(get_db)):
     and cutoff table backend-driven: any admin import (new year/round)
     shows up here immediately, with nothing to change on the frontend.
     """
+    global _cutoffs_json
+    if _cutoffs_json is not None:
+        return Response(content=_cutoffs_json, media_type="application/json")
+
     records = (
         db.query(models.CutoffRecord)
         .options(
@@ -129,4 +146,5 @@ def list_cutoffs(db: Session = Depends(get_db)):
                 rounds=rounds,
             )
         )
-    return out
+    _cutoffs_json = _cutoffs_adapter.dump_json(out)
+    return Response(content=_cutoffs_json, media_type="application/json")

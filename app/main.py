@@ -3,7 +3,8 @@ import logging
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -35,6 +36,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compresses HTML/JS/CSS/JSON on the wire (colleges.html ~6 MB -> ~0.6 MB,
+# /api/v1/cutoffs ~11 MB -> ~1 MB). Browsers decompress transparently.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -60,22 +65,29 @@ app.include_router(predict.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
 
 
+# One StaticFiles instance serves both the clean page URLs below and the "/"
+# mount at the bottom. Going through it (instead of a bare FileResponse) means
+# the browser gets "304 Not Modified" on repeat visits and reuses its cached
+# copy instead of re-downloading the page.
+frontend = StaticFiles(directory="frontend_dist", html=True)
+
+
 @app.get("/admin", include_in_schema=False)
-def admin_page():
+async def admin_page(request: Request):
     """Lets /admin work without typing the .html extension."""
-    return FileResponse("frontend_dist/admin.html")
+    return await frontend.get_response("admin.html", request.scope)
 
 
 @app.get("/login", include_in_schema=False)
-def login_page():
+async def login_page(request: Request):
     """Lets /login work without typing the .html extension."""
-    return FileResponse("frontend_dist/login.html")
+    return await frontend.get_response("login.html", request.scope)
 
 
 @app.get("/college", include_in_schema=False)
-def college_page():
+async def college_page(request: Request):
     """Serves the colleges page at the clean URL /college."""
-    return FileResponse("frontend_dist/colleges.html")
+    return await frontend.get_response("colleges.html", request.scope)
 
 
 # Old .html URLs (bookmarks, shared links) permanently redirect to the clean
@@ -113,4 +125,4 @@ for _old_path, _new_path in _CLEAN_URLS.items():
 # that depends on health-checking is affected. If some external monitor was
 # pinging bare "/" expecting that JSON specifically, point it at
 # /api/v1/health instead.
-app.mount("/", StaticFiles(directory="frontend_dist", html=True), name="frontend")
+app.mount("/", frontend, name="frontend")
