@@ -139,21 +139,6 @@
       return withRetry(() => request("/quotas"));
     },
 
-    /**
-     * GET /colleges — optional `state` (exact match) and `search`
-     * (partial, case-insensitive name match, 2+ chars per the backend's
-     * own validation). At least one should usually be set by the caller;
-     * the backend allows both omitted too (returns up to `limit`).
-     */
-    colleges({ state, search, limit = 100 } = {}) {
-      const params = new URLSearchParams();
-      if (state) params.set("state", state);
-      if (search) params.set("search", search);
-      if (limit) params.set("limit", String(limit));
-      const qs = params.toString();
-      return withRetry(() => request("/colleges" + (qs ? `?${qs}` : "")));
-    },
-
     /** Fetches every filter list in parallel; a single failed list doesn't block the others. */
     async allFilterOptions() {
       const keys = ["exams", "states", "authorities", "courses", "categories", "quotas"];
@@ -171,6 +156,11 @@
       return { options: out, failed };
     },
 
+    /** GET /predict/options — states, courses (per counselling state), categories, seat types. */
+    predictOptions() {
+      return withRetry(() => request("/predict/options"));
+    },
+
     /**
      * POST /predict
      * @param {{rank: number, filters?: object, limit?: number}} payload
@@ -178,7 +168,7 @@
     predict({ rank, filters = {}, limit = 500 }) {
       const cleanFilters = {};
       Object.entries(filters).forEach(([k, v]) => {
-        if (v !== "" && v !== null && v !== undefined) cleanFilters[k] = v;
+        if (v !== "" && v !== null && v !== undefined && v !== false) cleanFilters[k] = v;
       });
       return withRetry(() => request("/predict", { method: "POST", body: { rank, filters: cleanFilters, limit } }), 0);
     },

@@ -75,9 +75,10 @@
         <p class="hero-eyebrow">Live, database-backed predictions</p>
         <h1 class="serif">Find out what your NEET rank can get you.</h1>
         <p class="lead">
-          Enter your rank and, optionally, narrow it down by exam, state, course, category
-          or quota. Every result comes straight from the backend's historical
-          closing-rank database — nothing here is estimated or interpolated.
+          Enter your rank, your home state and where you want to be counselled. You'll only
+          see seats you are actually eligible for — for example, a Karnataka student looking at
+          Maharashtra sees only the Maharashtra seats open to all-India candidates. Every closing
+          rank shown is real historical data, not an estimate.
         </p>
         <div class="hero-facts" id="heroFacts" aria-live="polite"></div>
       </div>
@@ -88,49 +89,68 @@
 
     <section class="predictor-card" id="predictor" aria-labelledby="predictorHeading">
       <h2 id="predictorHeading" class="serif">Check your rank</h2>
-      <p class="sub">Required fields are marked. Leaving a filter on "Any" widens your results.</p>
+      <p class="sub">Required fields are marked. Leave the counselling state on "All states" to see every state you can apply to.</p>
 
       <form id="predictorForm" novalidate>
         <div class="field-grid">
           <div class="field">
-            <label for="rank">NEET rank <span aria-hidden="true">*</span></label>
+            <label for="rank">NEET-PG rank <span aria-hidden="true">*</span></label>
             <input type="number" id="rank" name="rank" inputmode="numeric" min="1" step="1"
                    placeholder="e.g. 45210" required aria-describedby="rankError">
             <span class="field-error" id="rankError" role="alert"></span>
           </div>
+          <div class="field">
+            <label for="course">Course</label>
+            <select id="course" name="course"><option value="">All courses</option></select>
+            <span class="hint" id="courseHint"></span>
+          </div>
+          <div class="field">
+            <label for="homeState">Your home state (domicile) <span aria-hidden="true">*</span></label>
+            <select id="homeState" name="homeState" required aria-describedby="homeStateError">
+              <option value="">Select your state</option>
+            </select>
+            <span class="field-error" id="homeStateError" role="alert"></span>
+          </div>
+          <div class="field">
+            <label for="state">Counselling state</label>
+            <select id="state" name="state"><option value="">All states I'm eligible for</option></select>
+          </div>
+          <div class="field">
+            <label for="studentCategory">Your category</label>
+            <select id="studentCategory" name="studentCategory">
+              <option value="general">General / UR</option>
+              <option value="ews">EWS</option>
+              <option value="obc">OBC / BC / SEBC</option>
+              <option value="sc">SC</option>
+              <option value="st">ST</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="gender">Gender</label>
+            <select id="gender" name="gender">
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
         </div>
 
+        <label class="check-row">
+          <input type="checkbox" id="isPwd" name="isPwd">
+          <span>I am a PwD (person with disability) candidate</span>
+        </label>
+
+        <p class="eligibility-note" id="eligibilityNote" hidden></p>
+
         <button type="button" class="advanced-toggle" id="advancedToggle" aria-expanded="false" aria-controls="advancedFilters">
-          More filters (exam, state, course, category, quota)
+          More options (seat types)
           <svg width="11" height="7" viewBox="0 0 11 7" fill="none" aria-hidden="true"><path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
 
-        <div class="field-grid" id="advancedFilters" hidden>
-          <div class="field">
-            <label for="exam">Exam</label>
-            <select id="exam" name="exam"><option value="">Any exam</option></select>
-          </div>
-          <div class="field">
-            <label for="state">State</label>
-            <select id="state" name="state"><option value="">Any state</option></select>
-          </div>
-          <div class="field">
-            <label for="authority">Counselling authority</label>
-            <select id="authority" name="authority"><option value="">Any authority</option></select>
-          </div>
-          <div class="field">
-            <label for="course">Course</label>
-            <select id="course" name="course"><option value="">Any course</option></select>
-          </div>
-          <div class="field">
-            <label for="category">Category</label>
-            <select id="category" name="category"><option value="">Any category</option></select>
-          </div>
-          <div class="field">
-            <label for="quota">Quota</label>
-            <select id="quota" name="quota"><option value="">Any quota</option></select>
-          </div>
-        </div>
+        <fieldset class="seat-types" id="advancedFilters" hidden>
+          <legend>Include these seat types</legend>
+          <div class="seat-type-grid" id="seatTypeList"></div>
+          <p class="hint">Government and private/management seats are included by default. Tick NRI, in-service, minority and the others only if you hold that eligibility.</p>
+        </fieldset>
 
         <div class="predictor-actions">
           <button type="submit" class="btn-primary" id="submitBtn">Predict my chances</button>
@@ -147,15 +167,15 @@
       <div class="info-grid">
         <div class="info-card">
           <h3>1. You enter a rank</h3>
-          <p>Optionally narrow it down by exam, state, authority, course, category or quota.</p>
+          <p>Along with your home state, category and the course and counselling state you're interested in.</p>
         </div>
         <div class="info-card">
-          <h3>2. It checks real records</h3>
-          <p>Your rank is compared against historical round-wise closing ranks stored in the backend database — the same data the counselling authorities publish.</p>
+          <h3>2. It checks eligibility, then real records</h3>
+          <p>Seats reserved for another state's domicile candidates, or for categories you don't belong to, are removed first. Your rank is then compared with the round-wise closing ranks the counselling authorities published.</p>
         </div>
         <div class="info-card">
           <h3>3. You see what cleared</h3>
-          <p>Every college and course combination your rank would have cleared is shown, closest cutoffs first, each labelled by how comfortable the margin was.</p>
+          <p>Each college and course appears once, with the best seat route for you, the latest year's round-by-round closing ranks, and a chance label based on that latest year.</p>
         </div>
       </div>
     </section>

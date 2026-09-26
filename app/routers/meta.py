@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session, joinedload
 from app import models
 from app.database import get_db
 from app.deps import get_current_user
+from app.services.predictor_service import invalidate_snapshot
+from app.services.seat_rules import classify
 from app.schemas import CollegeItem, CutoffBrowseRound, CutoffBrowseRow, NamedItem, RoundItem, YearItem
 
 router = APIRouter(tags=["reference data"], dependencies=[Depends(get_current_user)])
@@ -22,6 +24,7 @@ _cutoffs_adapter = TypeAdapter(list[CutoffBrowseRow])
 def invalidate_cutoffs_cache() -> None:
     global _cutoffs_json
     _cutoffs_json = None
+    invalidate_snapshot()
 
 
 @router.get("/exams", response_model=list[NamedItem])
@@ -132,6 +135,10 @@ def list_cutoffs(db: Session = Depends(get_db)):
         }
         if not rounds:
             continue
+        state = r.state.name if r.state else None
+        quota = r.quota.name if r.quota else None
+        category = r.category.code if r.category else None
+        info = classify(state, quota, r.cutoff_quota, category)
         out.append(
             CutoffBrowseRow(
                 institute=r.college.name if r.college else "",
@@ -144,6 +151,10 @@ def list_cutoffs(db: Session = Depends(get_db)):
                 cutoffQuota=r.cutoff_quota,
                 fee=r.fee,
                 rounds=rounds,
+                quotaLabel=info.quota_label,
+                seatType=info.seat_type,
+                allIndia=info.open_to_all_india,
+                categoryGroup=info.category_group,
             )
         )
     _cutoffs_json = _cutoffs_adapter.dump_json(out)

@@ -372,29 +372,29 @@
         </div>
       </div>
       <div class="filter-grid-new">
+        <div class="filter-field">
+          <label for="filterCourse">Course</label>
+          <select id="filterCourse" onchange="renderTable()"><option value="">All Courses</option></select>
+        </div>
         <div class="filter-field wide">
-          <label for="filterInstitute">Institute or course</label>
-          <input type="text" id="filterInstitute" placeholder="Search by name..." oninput="scheduleRenderTable()">
+          <label for="filterInstitute">Institute</label>
+          <input type="text" id="filterInstitute" placeholder="Search institute name..." oninput="scheduleRenderTable()">
         </div>
         <div class="filter-field">
           <label for="filterQuota">Quota</label>
           <select id="filterQuota" onchange="renderTable()"><option value="">All Quotas</option></select>
         </div>
         <div class="filter-field">
-          <label for="filterCourse">Course</label>
-          <select id="filterCourse" onchange="renderTable()"><option value="">All Courses</option></select>
-        </div>
-        <div class="filter-field">
           <label for="filterCategory">Category</label>
           <select id="filterCategory" onchange="renderTable()"><option value="">All Categories</option></select>
         </div>
         <div class="filter-field">
-          <label for="filterAuthority">Authority</label>
-          <select id="filterAuthority" onchange="renderTable()"><option value="">All Authorities</option></select>
-        </div>
-        <div class="filter-field">
-          <label for="filterExam">Exam</label>
-          <select id="filterExam" onchange="renderTable()"><option value="">All Exams</option></select>
+          <label for="filterEligibility">Who can apply</label>
+          <select id="filterEligibility" onchange="renderTable()">
+            <option value="">All seats</option>
+            <option value="all_india">Open to other-state students</option>
+            <option value="domicile">Home-state (domicile) only</option>
+          </select>
         </div>
         <div class="filter-field">
           <label for="filterYear">Year</label>
@@ -403,6 +403,14 @@
         <div class="filter-field">
           <label for="filterRound">Round</label>
           <select id="filterRound" onchange="renderTable()"><option value="">All Rounds</option></select>
+        </div>
+        <div class="filter-field">
+          <label for="filterAuthority">Authority</label>
+          <select id="filterAuthority" onchange="renderTable()"><option value="">All Authorities</option></select>
+        </div>
+        <div class="filter-field">
+          <label for="filterExam">Exam</label>
+          <select id="filterExam" onchange="renderTable()"><option value="">All Exams</option></select>
         </div>
       </div>
       <div class="filter-panel-footer" id="importLinkFilter">
@@ -32628,15 +32636,7 @@ function openState(s) {
   }
   document.getElementById("stateSubtitle").textContent = rows.length.toLocaleString("en-IN") + " record(s) across " + new Set(rows.map(r => r.course)).size + " course(s)";
 
-  fillSelect("filterQuota", [...new Set(rows.map(r => r.quota).filter(Boolean))]);
-  fillSelect("filterCourse", [...new Set(rows.map(r => r.course).filter(Boolean))].sort());
-  fillSelect("filterCategory", [...new Set(rows.map(r => r.category).filter(Boolean))].sort());
-  fillSelect("filterAuthority", [...new Set(rows.map(r => r.authority).filter(Boolean))].sort());
-  fillSelect("filterExam", [...new Set(rows.map(r => r.exam).filter(Boolean))].sort());
-  const roundKeysHere = new Set();
-  rows.forEach(r => Object.keys(r.rounds).forEach(k => roundKeysHere.add(k)));
-  fillSelect("filterYear", [...new Set([...roundKeysHere].map(k => roundKeyParts(k).year))].sort());
-  fillSelect("filterRound", [...new Set([...roundKeysHere].map(k => roundKeyParts(k).round))].sort());
+  TABLE_FILTER_IDS.forEach(id => { document.getElementById(id).value = ""; });
   document.getElementById("filterInstitute").value = "";
 
   renderTable();
@@ -32678,27 +32678,100 @@ function scheduleRenderTable() {
   renderTimer = setTimeout(renderTable, isCompact() ? 300 : 120);
 }
 
+// Quota shown to users: most states keep a placeholder "State" in `quota`
+// and the real quota (e.g. "TN Govt Quota") in `cutoffQuota`.
+function rowQuota(r) { return r.quotaLabel || r.cutoffQuota || r.quota || ""; }
+
+const CATEGORY_GROUP_LABELS = { general: "General", ews: "EWS", obc: "OBC/BC", sc: "SC", st: "ST", open: "Any category" };
+const TABLE_FILTER_IDS = ["filterCourse", "filterQuota", "filterCategory", "filterEligibility", "filterAuthority", "filterExam", "filterYear", "filterRound"];
+
 function currentTableFilters() {
   const val = id => document.getElementById(id).value;
   return {
     quota: val("filterQuota"), course: val("filterCourse"), category: val("filterCategory"),
+    eligibility: val("filterEligibility"),
     authority: val("filterAuthority"), exam: val("filterExam"), year: val("filterYear"),
     round: val("filterRound"), text: val("filterInstitute").trim(),
   };
 }
 
+// Applies every active filter except `skip` — used both for the table and
+// for building each dropdown's options (so a dropdown only offers values
+// that still have results with the other filters applied).
+function applyTableFilters(rows, f, skip) {
+  const text = (f.text || "").toLowerCase();
+  return rows.filter(r => {
+    if (skip !== "quota" && f.quota && rowQuota(r) !== f.quota) return false;
+    if (skip !== "course" && f.course && r.course !== f.course) return false;
+    if (skip !== "category" && f.category && (r.category || "") !== f.category) return false;
+    if (skip !== "eligibility" && f.eligibility) {
+      if (f.eligibility === "all_india" && r.allIndia !== true) return false;
+      if (f.eligibility === "domicile" && r.allIndia !== false) return false;
+    }
+    if (skip !== "authority" && f.authority && r.authority !== f.authority) return false;
+    if (skip !== "exam" && f.exam && r.exam !== f.exam) return false;
+    if (skip !== "year" && f.year && !Object.keys(r.rounds).some(k => roundKeyParts(k).year === f.year)) return false;
+    if (skip !== "round" && f.round && !Object.keys(r.rounds).some(k => roundKeyParts(k).round === f.round && (!f.year || roundKeyParts(k).year === f.year))) return false;
+    if (skip !== "text" && text && !r.institute.toLowerCase().includes(text)) return false;
+    return true;
+  });
+}
+
+function roundOrder(name) {
+  if (name === "Final") return 99;
+  const n = parseInt(String(name).replace(/\D/g, ""), 10);
+  return isNaN(n) ? 50 : n;
+}
+
+function escAttr(v) { return String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+// Rebuilds one dropdown with "value (count)" options, keeping the selection.
+function fillSelectCounted(id, counts, labelFn, sortFn) {
+  const sel = document.getElementById(id);
+  const cur = sel.value;
+  const first = sel.options[0] ? sel.options[0].text : "All";
+  let keys = [...counts.keys()];
+  keys.sort(sortFn || ((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })));
+  if (cur && !counts.has(cur)) keys.unshift(cur);
+  sel.innerHTML = '<option value="">' + first + '</option>' + keys.map(k => {
+    const n = counts.get(k) || 0;
+    const text = (labelFn ? labelFn(k) : k) + (n ? " (" + n.toLocaleString("en-IN") + ")" : " (no match)");
+    return '<option value="' + escAttr(k) + '"' + (k === cur ? " selected" : "") + '>' + escAttr(text) + '</option>';
+  }).join("");
+}
+
+function refreshTableFilterOptions(allRows, f) {
+  const count = (rows, keyFn) => {
+    const m = new Map();
+    rows.forEach(r => { const ks = keyFn(r); (Array.isArray(ks) ? ks : [ks]).forEach(k => { if (k) m.set(k, (m.get(k) || 0) + 1); }); });
+    return m;
+  };
+  fillSelectCounted("filterCourse", count(applyTableFilters(allRows, f, "course"), r => r.course));
+  fillSelectCounted("filterQuota", count(applyTableFilters(allRows, f, "quota"), r => rowQuota(r)));
+  const catRows = applyTableFilters(allRows, f, "category");
+  const catGroup = new Map();
+  catRows.forEach(r => { if (r.category && r.categoryGroup) catGroup.set(r.category, r.categoryGroup); });
+  fillSelectCounted("filterCategory", count(catRows, r => r.category), k => catGroup.has(k) && CATEGORY_GROUP_LABELS[catGroup.get(k)] && CATEGORY_GROUP_LABELS[catGroup.get(k)] !== k ? k + " — " + CATEGORY_GROUP_LABELS[catGroup.get(k)] : k);
+  fillSelectCounted("filterAuthority", count(applyTableFilters(allRows, f, "authority"), r => r.authority));
+  fillSelectCounted("filterExam", count(applyTableFilters(allRows, f, "exam"), r => r.exam));
+  fillSelectCounted("filterYear", count(applyTableFilters(allRows, f, "year"), r => [...new Set(Object.keys(r.rounds).map(k => roundKeyParts(k).year))]));
+  fillSelectCounted("filterRound", count(applyTableFilters(allRows, f, "round"), r => [...new Set(Object.keys(r.rounds).filter(k => !f.year || roundKeyParts(k).year === f.year).map(k => roundKeyParts(k).round))]),
+    null, (a, b) => roundOrder(a) - roundOrder(b));
+
+  // "Who can apply" — show counts too; disable if the data has no eligibility info (offline fallback).
+  const elig = document.getElementById("filterEligibility");
+  const eRows = applyTableFilters(allRows, f, "eligibility");
+  const nAll = eRows.filter(r => r.allIndia === true).length, nDom = eRows.filter(r => r.allIndia === false).length;
+  elig.options[1].text = "Open to other-state students (" + nAll.toLocaleString("en-IN") + ")";
+  elig.options[2].text = "Home-state (domicile) only (" + nDom.toLocaleString("en-IN") + ")";
+  elig.disabled = nAll + nDom === 0 && !elig.value;
+}
+
 function computeStateView() {
   const f = currentTableFilters();
-  let rows = stateRows(currentState);
-  const text = f.text.toLowerCase();
-  if (f.quota) rows = rows.filter(r => r.quota === f.quota);
-  if (f.course) rows = rows.filter(r => r.course === f.course);
-  if (f.category) rows = rows.filter(r => r.category === f.category);
-  if (f.authority) rows = rows.filter(r => r.authority === f.authority);
-  if (f.exam) rows = rows.filter(r => r.exam === f.exam);
-  if (f.year) rows = rows.filter(r => Object.keys(r.rounds).some(k => roundKeyParts(k).year === f.year));
-  if (f.round) rows = rows.filter(r => Object.keys(r.rounds).some(k => roundKeyParts(k).round === f.round));
-  if (text) rows = rows.filter(r => r.institute.toLowerCase().includes(text) || (r.course || "").toLowerCase().includes(text));
+  const allRows = stateRows(currentState);
+  refreshTableFilterOptions(allRows, f);
+  let rows = applyTableFilters(allRows, f, null);
 
   const allRoundKeysRT = new Set();
   rows.forEach(r => Object.keys(r.rounds).forEach(k => { if ((!f.year || roundKeyParts(k).year === f.year) && (!f.round || roundKeyParts(k).round === f.round)) allRoundKeysRT.add(k); }));
@@ -32721,7 +32794,7 @@ function computeStateView() {
   });
   rows = rows.slice().sort((a, b) => best.get(a) - best.get(b));
 
-  return { state: currentState, rows, roundKeysPresent, colStats, hasCutoffQuota: rows.some(r => r.cutoffQuota), filters: f };
+  return { state: currentState, rows, roundKeysPresent, colStats, hasCutoffQuota: false, filters: f };
 }
 
 function stateRowHtml(r, view) {
@@ -32735,7 +32808,7 @@ function stateRowHtml(r, view) {
   }).join("");
   const cutoffQuotaCell = view.hasCutoffQuota ? '<td data-label="Cutoff Quota">' + (r.cutoffQuota || "-") + '</td>' : "";
   const feeCell = '<td data-label="Fees">' + formatFeeDisplay(r.fee) + '</td>';
-  return '<tr><td class="sticky-col col-quota" data-label="Quota"><span class="quota-pill">' + naField(r.quota) + '</span></td><td class="sticky-col col-institute institute-cell" style="font-weight:600;">' + r.institute + '</td><td data-label="Course">' + naField(r.course) + '</td>' + cutoffQuotaCell + '<td data-label="Category">' + naField(r.category) + '</td>' + feeCell + cells + '</tr>';
+  return '<tr><td class="sticky-col col-quota" data-label="Quota"><span class="quota-pill">' + naField(rowQuota(r)) + '</span></td><td class="sticky-col col-institute institute-cell" style="font-weight:600;">' + r.institute + '</td><td data-label="Course">' + naField(r.course) + '</td>' + cutoffQuotaCell + '<td data-label="Category">' + naField(r.category) + '</td>' + feeCell + cells + '</tr>';
 }
 
 function renderTable() {
@@ -32787,7 +32860,7 @@ if (COMPACT_MQ.addEventListener) COMPACT_MQ.addEventListener("change", () => { i
 else if (COMPACT_MQ.addListener) COMPACT_MQ.addListener(() => { if (currentState) renderTable(); });
 
 function clearTableFilters() {
-  ["filterQuota", "filterCourse", "filterCategory", "filterAuthority", "filterExam", "filterYear", "filterRound"].forEach(id => {
+  TABLE_FILTER_IDS.forEach(id => {
     document.getElementById(id).value = "";
   });
   document.getElementById("filterInstitute").value = "";
@@ -32795,8 +32868,7 @@ function clearTableFilters() {
 }
 
 function updateActiveFilterCount() {
-  const ids = ["filterQuota", "filterCourse", "filterCategory", "filterAuthority", "filterExam", "filterYear", "filterRound"];
-  let n = ids.filter(id => document.getElementById(id).value).length;
+  let n = TABLE_FILTER_IDS.filter(id => document.getElementById(id).value).length;
   if (document.getElementById("filterInstitute").value) n++;
   const el = document.getElementById("activeFilterCount");
   el.textContent = n > 0 ? n + " filter" + (n > 1 ? "s" : "") + " applied" : "";
@@ -32922,6 +32994,7 @@ function describeFilters(f) {
   if (f.course) out.push("Course: " + f.course);
   if (f.category) out.push("Category: " + f.category);
   if (f.quota) out.push("Quota: " + f.quota);
+  if (f.eligibility) out.push(f.eligibility === "all_india" ? "Open to other-state students" : "Home-state (domicile) only");
   if (f.authority) out.push("Authority: " + f.authority);
   if (f.exam) out.push("Exam: " + f.exam);
   if (f.year) out.push("Year: " + f.year);
@@ -32993,7 +33066,7 @@ function buildStatePdf(view) {
   const head = ["Quota", "Institute", "Course"].concat(view.hasCutoffQuota ? ["Cutoff Quota"] : [], ["Category", "Fees"], view.roundKeysPresent.map(roundLabel));
   const firstRoundCol = baseCols;
   const body = view.rows.map(r => {
-    const base = [pdfText(r.quota), pdfText(r.institute), pdfText(r.course)];
+    const base = [pdfText(rowQuota(r)), pdfText(r.institute), pdfText(r.course)];
     if (view.hasCutoffQuota) base.push(pdfText(r.cutoffQuota));
     base.push(pdfText(r.category), r.fee == null ? "-" : "Rs. " + Number(r.fee).toLocaleString("en-IN"));
     view.roundKeysPresent.forEach(k => { const v = r.rounds[k] ? r.rounds[k].close : null; base.push(v == null ? "-" : v.toLocaleString("en-IN")); });

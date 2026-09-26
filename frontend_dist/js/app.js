@@ -36,14 +36,23 @@
     }
   }
 
-  const FILTER_SELECTS = {
-    exams: { el: document.getElementById("exam"), label: "exam" },
-    states: { el: document.getElementById("state"), label: "state" },
-    authorities: { el: document.getElementById("authority"), label: "authority" },
-    courses: { el: document.getElementById("course"), label: "course" },
-    categories: { el: document.getElementById("category"), label: "category" },
-    quotas: { el: document.getElementById("quota"), label: "quota" },
+  const form = {
+    course: document.getElementById("course"),
+    courseHint: document.getElementById("courseHint"),
+    homeState: document.getElementById("homeState"),
+    homeStateError: document.getElementById("homeStateError"),
+    state: document.getElementById("state"),
+    studentCategory: document.getElementById("studentCategory"),
+    gender: document.getElementById("gender"),
+    isPwd: document.getElementById("isPwd"),
+    eligibilityNote: document.getElementById("eligibilityNote"),
+    seatTypeList: document.getElementById("seatTypeList"),
   };
+
+  const HOME_STATE_KEY = "neet_home_state";
+  let OPTIONS = null;          // from GET /predict/options
+  let lastResults = null;      // last successful /predict response
+  let activeChance = "all";    // chance tab currently shown
 
   // -------------------------------------------------------------- health
   async function checkHealth() {
@@ -67,50 +76,102 @@
     }
   }
 
-  // ------------------------------------------------------- filter lists
-  async function loadFilterOptions() {
-    Object.values(FILTER_SELECTS).forEach(({ el }) => (el.disabled = true));
-
-    const { options, failed } = await window.NeetApi.allFilterOptions();
-
-    Object.entries(FILTER_SELECTS).forEach(([key, { el, label }]) => {
-      const items = options[key] || [];
-      items.forEach((item) => {
-        const opt = document.createElement("option");
-        opt.value = item.name;
-        opt.textContent = item.name;
-        el.appendChild(opt);
-      });
-      if (failed.includes(key)) {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = `Couldn't load ${label} list`;
-        opt.disabled = true;
-        el.appendChild(opt);
-        el.disabled = true;
-      } else {
-        el.disabled = false;
-      }
-    });
-
-    return options;
+  // ------------------------------------------------------- form options
+  function setOptions(select, values, keepFirst = true) {
+    const current = select.value;
+    const first = keepFirst && select.options[0] ? select.options[0].outerHTML : "";
+    select.innerHTML = first + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+    if ([...select.options].some((o) => o.value === current)) select.value = current;
   }
+
+  async function loadFormOptions() {
+    [form.course, form.homeState, form.state].forEach((el) => (el.disabled = true));
+    try {
+      OPTIONS = await window.NeetApi.predictOptions();
+    } catch (err) {
+      form.courseHint.textContent = "Couldn't load options from the server — reload the page to try again.";
+      return;
+    }
+    setOptions(form.homeState, OPTIONS.home_states);
+    setOptions(form.state, OPTIONS.counselling_states);
+    let savedHome = null;
+    try { savedHome = localStorage.getItem(HOME_STATE_KEY); } catch (e) { /* storage unavailable */ }
+    if (savedHome && OPTIONS.home_states.includes(savedHome)) form.homeState.value = savedHome;
+
+    form.seatTypeList.innerHTML = OPTIONS.seat_types.map((t) => `
+      <label class="check-row">
+        <input type="checkbox" name="seatType" value="${escapeHtml(t.id)}" ${t.default ? "checked" : ""}>
+        <span>${escapeHtml(t.label)}</span>
+      </label>`).join("");
+
+    [form.course, form.homeState, form.state].forEach((el) => (el.disabled = false));
+    refreshCourses();
+    updateEligibilityNote();
+  }
+
+  /** Course list follows the counselling state, so every course offered has data there. */
+  function refreshCourses() {
+    if (!OPTIONS) return;
+    const st = form.state.value;
+    const list = st ? (OPTIONS.courses_by_state[st] || []) : OPTIONS.courses;
+    const before = form.course.value;
+    setOptions(form.course, list);
+    if (before && !list.includes(before)) {
+      form.courseHint.textContent = `${before} has no data in ${st} — showing all courses.`;
+    } else {
+      form.courseHint.textContent = "";
+    }
+  }
+
+  function updateEligibilityNote() {
+    const home = form.homeState.value;
+    const target = form.state.value;
+    const note = form.eligibilityNote;
+    note.classList.remove("ok");
+    if (!home) { note.hidden = true; return; }
+    if (!target) {
+      note.textContent = `Showing all ${home} seats you qualify for, plus seats in other states that are open to all-India candidates. Outside ${home}, you compete as General — category reservation only applies in your home state.`;
+    } else if (target === home) {
+      note.classList.add("ok");
+      note.textContent = `${home} is your home state, so its domicile (state quota) seats and your category reservation both apply.`;
+    } else {
+      note.textContent = `As a ${home} candidate you can only take ${target} seats that are open to all-India candidates (mostly private / management seats), and you compete as General there. ${target} state-quota seats are for ${target} domicile candidates only.`;
+    }
+    note.hidden = false;
+  }
+
+  form.state.addEventListener("change", () => { refreshCourses(); updateEligibilityNote(); });
+  form.homeState.addEventListener("change", () => {
+    try { localStorage.setItem(HOME_STATE_KEY, form.homeState.value); } catch (e) { /* ignore */ }
+    form.homeStateError.textContent = "";
+    form.homeState.classList.remove("invalid");
+    updateEligibilityNote();
+  });
 
   // ------------------------------------------------------- advanced UI
   els.advancedToggle.addEventListener("click", () => {
     const isOpen = els.advancedToggle.getAttribute("aria-expanded") === "true";
     els.advancedToggle.setAttribute("aria-expanded", String(!isOpen));
     els.advancedFilters.hidden = isOpen;
-    els.advancedToggle.firstChild.textContent = isOpen
-      ? "More filters (exam, state, course, category, quota) "
-      : "Hide extra filters ";
+    els.advancedToggle.firstChild.textContent = isOpen ? "More options (seat types) " : "Hide seat types ";
   });
 
   els.resetBtn.addEventListener("click", () => {
+    const home = form.homeState.value;
     els.form.reset();
+    form.homeState.value = home; // keep the student's own state
     els.rankError.textContent = "";
     els.rank.classList.remove("invalid");
     els.resultsSection.innerHTML = "";
+    lastResults = null;
+    if (OPTIONS) {
+      form.seatTypeList.querySelectorAll("input").forEach((cb) => {
+        const t = OPTIONS.seat_types.find((x) => x.id === cb.value);
+        cb.checked = !!(t && t.default);
+      });
+    }
+    refreshCourses();
+    updateEligibilityNote();
   });
 
   // ------------------------------------------------------- validation
@@ -132,6 +193,17 @@
     return n;
   }
 
+  function validateHomeState() {
+    if (!form.homeState.value) {
+      form.homeStateError.textContent = "Select your home state — it decides which seats you can take.";
+      form.homeState.classList.add("invalid");
+      return false;
+    }
+    form.homeStateError.textContent = "";
+    form.homeState.classList.remove("invalid");
+    return true;
+  }
+
   els.rank.addEventListener("input", () => {
     if (els.rank.classList.contains("invalid")) validateRank();
   });
@@ -140,25 +212,28 @@
   els.form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const rank = validateRank();
-    if (rank === null) {
-      els.rank.focus();
-      return;
-    }
+    const homeOk = validateHomeState();
+    if (rank === null) { els.rank.focus(); return; }
+    if (!homeOk) { form.homeState.focus(); return; }
 
-    const filters = {};
-    Object.entries(FILTER_SELECTS).forEach(([key, { el }]) => {
-      if (el.value) {
-        // API expects singular filter keys (exam, state, authority, course, category, quota)
-        const filterKey = key.endsWith("ies") ? key.slice(0, -3) + "y" : key.replace(/s$/, "");
-        filters[filterKey] = el.value;
-      }
-    });
+    const seatTypes = [...form.seatTypeList.querySelectorAll("input:checked")].map((cb) => cb.value);
+    const filters = {
+      home_state: form.homeState.value,
+      state: form.state.value,
+      course: form.course.value,
+      student_category: form.studentCategory.value,
+      gender: form.gender.value,
+      is_pwd: form.isPwd.checked,
+      seat_types: seatTypes.length ? seatTypes : ["government", "private"],
+    };
 
     setLoading(true);
     renderLoading();
 
     try {
-      const result = await window.NeetApi.predict({ rank, filters });
+      const result = await window.NeetApi.predict({ rank, filters, limit: 2000 });
+      lastResults = result;
+      activeChance = "all";
       renderResults(result);
     } catch (err) {
       renderError(err);
@@ -202,50 +277,72 @@
     });
   }
 
-  function renderResults(data) {
-    const total = data.total_results ?? (data.results ? data.results.length : 0);
+  const CHANCES = ["High Chance", "Moderate Chance", "Borderline"];
 
+  function renderResults(data) {
     if (!data.results || data.results.length === 0) {
       els.resultsSection.innerHTML = `
         <div class="state-box">
           <p>${escapeHtml(data.message || "No results matched that rank and those filters.")}</p>
-          <p>Try widening a filter, or removing one, and predict again.</p>
+          <p class="results-empty-hint">Try a different course, choose "All states I'm eligible for", or include more seat types under More options.</p>
         </div>`;
+      els.resultsSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
     }
 
-    const cards = data.results.map(renderResultCard).join("");
+    const summary = data.summary || {};
+    const shown = activeChance === "all" ? data.results : data.results.filter((r) => r.chance === activeChance);
+    const tab = (key, label, n) =>
+      `<button type="button" class="chance-tab" data-chance-tab="${escapeHtml(key)}" aria-pressed="${activeChance === key}">${escapeHtml(label)} (${n.toLocaleString("en-IN")})</button>`;
+
     els.resultsSection.innerHTML = `
       <div class="results-summary">
-        <h3 class="serif">Results</h3>
-        <span class="count">${total.toLocaleString("en-IN")} of ${(data.total_matching_records ?? total).toLocaleString("en-IN")} matching record${data.total_matching_records === 1 ? "" : "s"}</span>
+        <h3 class="serif">${data.results.length.toLocaleString("en-IN")} college &amp; course option${data.results.length === 1 ? "" : "s"}</h3>
+        <span class="count">rank ${Number(data.rank_checked).toLocaleString("en-IN")} · from ${(data.total_eligible_records || 0).toLocaleString("en-IN")} seat records you're eligible for</span>
       </div>
-      ${data.message ? `<p class="results-summary" style="margin-top:-8px;color:var(--muted);font-size:13px;">${escapeHtml(data.message)}</p>` : ""}
-      <div class="result-grid">${cards}</div>`;
-    els.resultsSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      <div class="chance-tabs" role="group" aria-label="Filter by chance">
+        ${tab("all", "All", data.results.length)}
+        ${CHANCES.map((c) => tab(c, c, summary[c] || 0)).join("")}
+      </div>
+      <div class="result-grid">${shown.map(renderResultCard).join("") || '<p class="results-empty-hint">No results in this group.</p>'}</div>`;
+
+    els.resultsSection.querySelectorAll("[data-chance-tab]").forEach((b) =>
+      b.addEventListener("click", () => {
+        activeChance = b.dataset.chanceTab;
+        renderResults(lastResults);
+      })
+    );
   }
 
-  /**
-   * Renders one PredictionResult. Every field is optional except
-   * institute/close_rank/year/round/chance/margin_percent, per the
-   * backend's schema — only fields actually present are shown.
-   */
   function renderResultCard(r) {
     const metaItems = [];
-    const add = (label, value, opts = {}) => {
+    const add = (label, value) => {
       if (value === null || value === undefined || value === "") return;
-      metaItems.push(`<div><span class="k">${label}</span><span class="v">${opts.raw ? value : escapeHtml(String(value))}</span></div>`);
+      metaItems.push(`<div><span class="k">${label}</span><span class="v">${escapeHtml(String(value))}</span></div>`);
     };
 
-    add("Category", r.category);
     add("Quota", r.quota);
     add("Seat type", r.seat_type);
-    add("Year", r.year);
-    add("Round", r.round);
-    add("Opening rank", typeof r.open_rank === "number" ? r.open_rank.toLocaleString("en-IN") : null);
-    add("Closing rank", typeof r.close_rank === "number" ? r.close_rank.toLocaleString("en-IN") : null);
+    add("Category", r.category);
+    add("Closing rank", typeof r.close_rank === "number" ? `${r.close_rank.toLocaleString("en-IN")} (${r.year} ${r.round})` : null);
     add("Margin", typeof r.margin_percent === "number" ? `${r.margin_percent.toFixed(1)}%` : null);
     add("Fee", typeof r.fee === "number" ? `₹${r.fee.toLocaleString("en-IN")}` : null);
+
+    const home = form.homeState.value;
+    const tags = [];
+    if (r.state && r.state === home) tags.push('<span class="tag home">Home state</span>');
+    else if (r.open_to_all_india) tags.push('<span class="tag all-india">Open to all-India candidates</span>');
+    if (r.other_routes > 0) tags.push(`<span class="tag routes">+${r.other_routes} other quota/category route${r.other_routes > 1 ? "s" : ""}</span>`);
+
+    const rounds = r.latest_year_rounds || {};
+    const cleared = new Set(r.cleared_in || []);
+    const roundNames = Object.keys(rounds);
+    const strip = roundNames.length
+      ? `<div class="round-strip">${escapeHtml(String(r.latest_year || ""))} closing ranks by round: ${roundNames.map((rn) => {
+          const hit = cleared.has(`${r.latest_year} ${rn}`);
+          return `${escapeHtml(rn)} <b class="${hit ? "hit" : ""}">${Number(rounds[rn]).toLocaleString("en-IN")}</b>`;
+        }).join(" · ")}</div>`
+      : "";
 
     const placeParts = [r.state, r.authority].filter(Boolean).join(" · ");
 
@@ -255,10 +352,12 @@
           <div>
             <h4>${escapeHtml(r.institute || "Institute")}${r.course ? ` — ${escapeHtml(r.course)}` : ""}</h4>
             ${placeParts ? `<div class="place">${escapeHtml(placeParts)}</div>` : ""}
+            ${tags.join("")}
           </div>
           ${r.chance ? `<span class="chance-badge" data-chance="${escapeHtml(r.chance)}">${escapeHtml(r.chance)}</span>` : ""}
         </div>
         <div class="result-meta">${metaItems.join("")}</div>
+        ${strip}
       </article>`;
   }
 
@@ -286,5 +385,5 @@
   // ------------------------------------------------------- boot
   checkHealth();
   loadCurrentUser();
-  loadFilterOptions();
+  loadFormOptions();
 })();

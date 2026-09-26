@@ -51,12 +51,31 @@ class CutoffBrowseRow(BaseModel):
     cutoffQuota: Optional[str] = None
     fee: Optional[float] = None
     rounds: Dict[str, CutoffBrowseRound]
+    # Derived by app/services/seat_rules.py
+    quotaLabel: Optional[str] = None
+    seatType: Optional[str] = None
+    allIndia: Optional[bool] = None
+    categoryGroup: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
 # Prediction
 # ---------------------------------------------------------------------------
 class PredictionFilters(BaseModel):
+    # Student profile — decides which seats the student is eligible for.
+    home_state: Optional[str] = Field(default=None, description="Student's domicile / home state")
+    student_category: Optional[str] = Field(
+        default=None, description="general | ews | obc | sc | st (reservation only applies in home state)"
+    )
+    is_pwd: bool = False
+    gender: Optional[str] = Field(default=None, description="male | female")
+    seat_types: Optional[List[str]] = Field(
+        default=None,
+        description="government, private, nri, in_service, minority, institutional, special "
+        "(default: government + private)",
+    )
+
+    # Where to look. `state` is the counselling state (blank = every state the student is eligible for).
     exam: Optional[str] = None
     state: Optional[str] = None
     authority: Optional[str] = None
@@ -97,15 +116,32 @@ class PredictionResult(BaseModel):
     close_rank: int
     chance: str  # "High Chance" | "Moderate Chance" | "Borderline"
     margin_percent: float
+    open_to_all_india: Optional[bool] = None
+    category_group: Optional[str] = None
+    latest_year: Optional[int] = None
+    latest_year_rounds: Dict[str, int] = {}
+    cleared_in: List[str] = []
+    other_routes: int = 0
 
 
 class PredictionResponse(BaseModel):
     rank_checked: int
     filters_applied: Dict[str, Any]
     total_matching_records: int
+    total_eligible_records: int = 0
     total_results: int
+    summary: Dict[str, int] = {}
     results: List[PredictionResult]
     message: Optional[str] = None
+
+
+class PredictOptions(BaseModel):
+    home_states: List[str]
+    counselling_states: List[str]
+    courses: List[str]
+    courses_by_state: Dict[str, List[str]]
+    student_categories: List[NamedItem]
+    seat_types: List[Dict[str, Any]]
 
 
 # ---------------------------------------------------------------------------

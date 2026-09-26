@@ -1,141 +1,309 @@
 """
-Rank prediction engine — a direct port of runRankPredictor() from the
-original frontend, with results now coming from Postgres instead of an
-in-browser array.
+Rank prediction engine.
 
-Original behaviour, preserved exactly:
-  1. Filter records by exam/state/authority/course/category/quota (any
-     blank filter is ignored, exact match on the others).
-  2. Across every (year, round) on file for those records, a "hit" is any
-     round whose close_rank is >= the entered rank (i.e. this rank would
-     have cleared that round historically).
-  3. Hits are sorted by closing rank ascending, then de-duplicated to the
-     single tightest (lowest) closing-rank match per
-     institute + course + category — exactly as the frontend's
-     `dupKey = institute + course + category` de-dup did.
-  4. Two distinct "no result" messages are preserved: no records matched
-     the filters at all, vs. records matched but none had a close_rank
-     reaching this rank.
+A student describes themselves (rank, home/domicile state, category, PwD,
+gender) and where they want to be counselled (a state, or "any state I'm
+eligible for") and optionally a course. For every cutoff record we decide,
+using app/services/seat_rules.py, whether that student could actually be
+allotted that seat — e.g. a Karnataka student looking at Maharashtra only
+sees Maharashtra seats that are open to all-India candidates, and competes
+there as General.
 
-Added (additive, does not change which rows qualify): a "chance" label
-and margin percentage per result, since raw closing-rank numbers alone
-don't tell a student how comfortable a match is.
+Each eligible record is then compared with its historical closing ranks:
+
+  * it qualifies if the rank is within the closing rank of ANY year/round
+    on file (i.e. this rank has actually got that seat before);
+  * the chance label is based on the MOST RECENT year on file:
+      High      – rank is within that year's first-round closing rank, or
+                  at least 20% inside that year's final closing rank
+      Moderate  – rank is within that year's final (last round) closing rank
+      Borderline– rank only cleared an older year, or is within 5% of the edge
+
+Results are one card per institute + course. When a student qualifies for
+the same institute + course through several quotas/categories, the best
+route (best chance; government before private at equal chance) is shown
+and the rest are counted in `other_routes`.
+
+Nothing is estimated or interpolated: every number shown is a closing rank
+that exists in the database.
 """
-from dataclasses import dataclass
+from __future__ import annotations
 
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+import threading
+from dataclasses import dataclass, field
+
+from sqlalchemy.orm import Session, joinedload
 
 from app import models
 from app.schemas import PredictionFilters, PredictionResult
+from app.services import seat_rules as rules
+
+CHANCE_ORDER = {"High Chance": 0, "Moderate Chance": 1, "Borderline": 2}
+# When one institute+course is reachable through several seats with the same
+# chance, prefer the cheaper / less restrictive route.
+ROUTE_PREFERENCE = {
+    rules.GOVERNMENT: 0, rules.IN_SERVICE: 1, rules.INSTITUTIONAL: 1, rules.SPECIAL: 1,
+    rules.MINORITY: 2, rules.PRIVATE: 3, rules.NRI: 4,
+}
 
 
+# ---------------------------------------------------------------------------
+# In-memory snapshot of every record (rebuilt after any admin import)
+# ---------------------------------------------------------------------------
+@dataclass
+class SnapRecord:
+    id: int
+    institute: str
+    state: str | None
+    authority: str | None
+    exam: str | None
+    course: str | None
+    category: str | None
+    quota: str | None
+    cutoff_quota: str | None
+    seat_type_raw: str | None
+    fee: float | None
+    info: rules.SeatInfo
+    # (year, round_name, open, close), sorted by year then round
+    rounds: list[tuple[int, str, int | None, int]] = field(default_factory=list)
+
+
+_snapshot: list[SnapRecord] | None = None
+_lock = threading.Lock()
+
+
+def invalidate_snapshot() -> None:
+    global _snapshot
+    _snapshot = None
+
+
+def _round_sort_key(name: str) -> int:
+    if name == "Final":
+        return 99
+    digits = "".join(ch for ch in name if ch.isdigit())
+    return int(digits) if digits else 50
+
+
+def _load_snapshot(db: Session) -> list[SnapRecord]:
+    global _snapshot
+    if _snapshot is not None:
+        return _snapshot
+    with _lock:
+        if _snapshot is not None:
+            return _snapshot
+        records = (
+            db.query(models.CutoffRecord)
+            .options(
+                joinedload(models.CutoffRecord.college),
+                joinedload(models.CutoffRecord.state),
+                joinedload(models.CutoffRecord.authority),
+                joinedload(models.CutoffRecord.exam),
+                joinedload(models.CutoffRecord.course),
+                joinedload(models.CutoffRecord.category),
+                joinedload(models.CutoffRecord.quota),
+                joinedload(models.CutoffRecord.rounds),
+            )
+            .all()
+        )
+        out: list[SnapRecord] = []
+        for r in records:
+            if not r.rounds:
+                continue
+            state = r.state.name if r.state else None
+            quota = r.quota.name if r.quota else None
+            category = r.category.code if r.category else None
+            rounds = sorted(
+                ((rr.year, rr.round_name, rr.open_rank, rr.close_rank) for rr in r.rounds),
+                key=lambda t: (t[0], _round_sort_key(t[1])),
+            )
+            out.append(
+                SnapRecord(
+                    id=r.id,
+                    institute=r.college.name if r.college else "Unknown",
+                    state=state,
+                    authority=r.authority.name if r.authority else None,
+                    exam=r.exam.name if r.exam else None,
+                    course=r.course.name if r.course else None,
+                    category=category,
+                    quota=quota,
+                    cutoff_quota=r.cutoff_quota,
+                    seat_type_raw=r.seat_type,
+                    fee=r.fee,
+                    info=rules.classify(state, quota, r.cutoff_quota, category),
+                    rounds=rounds,
+                )
+            )
+        _snapshot = out
+        return out
+
+
+def snapshot(db: Session) -> list[SnapRecord]:
+    return _load_snapshot(db)
+
+
+# ---------------------------------------------------------------------------
+# Prediction
+# ---------------------------------------------------------------------------
 @dataclass
 class PredictionOutcome:
     total_matching_records: int
+    total_eligible_records: int
     results: list[PredictionResult]
     message: str | None
+    summary: dict
 
 
-def _chance_label(rank: int, close_rank: int) -> tuple[str, float]:
-    if close_rank <= 0:
-        return "Borderline", 0.0
-    margin = (close_rank - rank) / close_rank
-    margin_pct = round(margin * 100, 1)
-    if margin > 0.20:
-        return "High Chance", margin_pct
-    if margin > 0.05:
-        return "Moderate Chance", margin_pct
-    return "Borderline", margin_pct
+def _evaluate(rank: int, rec: SnapRecord):
+    """Returns (chance, margin_pct, ref_round, cleared, latest_rounds) or None."""
+    cleared = [(y, rn, c) for (y, rn, _o, c) in rec.rounds if c >= rank]
+    if not cleared:
+        return None
+    latest_year = rec.rounds[-1][0]
+    latest = [t for t in rec.rounds if t[0] == latest_year]
+    first_close = latest[0][3]
+    final = latest[-1]
+    final_close = final[3]
+    margin = (final_close - rank) / final_close if final_close > 0 else 0.0
 
-
-def _base_query(db: Session, filters: PredictionFilters):
-    q = db.query(models.CutoffRecord)
-    if filters.exam:
-        q = q.join(models.Exam).filter(models.Exam.name == filters.exam)
-    if filters.state:
-        q = q.join(models.State, models.CutoffRecord.state_id == models.State.id).filter(
-            models.State.name == filters.state
-        )
-    if filters.authority:
-        q = q.join(models.Authority).filter(models.Authority.name == filters.authority)
-    if filters.course:
-        q = q.join(models.Course).filter(models.Course.name == filters.course)
-    if filters.category:
-        q = q.join(models.Category).filter(models.Category.code == filters.category)
-    if filters.quota:
-        q = q.join(models.Quota).filter(models.Quota.name == filters.quota)
-    return q
+    if rank <= final_close:
+        if rank <= first_close or margin > 0.20:
+            chance = "High Chance"
+        elif margin > 0.05:
+            chance = "Moderate Chance"
+        else:
+            chance = "Borderline"
+        ref = final
+    else:
+        chance = "Borderline"
+        # the most recent round that this rank did clear
+        y, rn, c = cleared[-1]
+        ref = next(t for t in rec.rounds if t[0] == y and t[1] == rn)
+        margin = (c - rank) / c if c > 0 else 0.0
+    return chance, round(margin * 100, 1), ref, cleared, latest
 
 
 def predict(db: Session, rank: int, filters: PredictionFilters, limit: int = 500) -> PredictionOutcome:
-    matching_records = _base_query(db, filters).all()
+    data = _load_snapshot(db)
 
-    if not matching_records:
+    home_state = filters.home_state or None
+    target_state = filters.state or None
+    seat_types = set(filters.seat_types or rules.DEFAULT_SEAT_TYPES)
+    student_cat = (filters.student_category or "").lower() or None
+    is_female = (filters.gender or "").lower() == "female"
+
+    # 1) plain filters (exact match on anything the caller set)
+    def base_ok(r: SnapRecord) -> bool:
+        if filters.exam and r.exam != filters.exam:
+            return False
+        if target_state and r.state != target_state:
+            return False
+        if filters.authority and r.authority != filters.authority:
+            return False
+        if filters.course and r.course != filters.course:
+            return False
+        if filters.category and r.category != filters.category:
+            return False
+        if filters.quota and filters.quota not in (r.quota, r.cutoff_quota, r.info.quota_label):
+            return False
+        return True
+
+    matching = [r for r in data if base_ok(r)]
+    if not matching:
         return PredictionOutcome(
-            total_matching_records=0,
-            results=[],
-            message=(
-                "No historical records match these filters at all — insufficient data to predict "
-                "anything here. Import more cutoff data for this state/course/category to enable a "
-                "prediction."
-            ),
+            0, 0, [],
+            "No cutoff records exist for this state/course combination yet, so there is nothing to "
+            "predict from. Try a different course or counselling state.",
+            {},
         )
 
-    record_ids = [r.id for r in matching_records]
-    round_q = (
-        db.query(models.RoundResult, models.CutoffRecord)
-        .join(models.CutoffRecord, models.RoundResult.cutoff_record_id == models.CutoffRecord.id)
-        .filter(
-            and_(
-                models.RoundResult.cutoff_record_id.in_(record_ids),
-                models.RoundResult.close_rank >= rank,
+    # 2) eligibility for this student
+    use_profile = bool(home_state or student_cat or filters.seat_types or filters.is_pwd or filters.gender)
+    if use_profile:
+        eligible = [
+            r for r in matching
+            if rules.student_can_take(
+                r.info,
+                seat_state=r.state,
+                home_state=home_state,
+                student_category=student_cat,
+                is_pwd=bool(filters.is_pwd),
+                is_female=is_female,
+                seat_types=seat_types,
             )
-        )
-        .order_by(models.RoundResult.close_rank.asc())
-    )
-    hits = round_q.all()
+        ]
+    else:
+        eligible = matching
 
-    if not hits:
-        return PredictionOutcome(
-            total_matching_records=len(matching_records),
-            results=[],
-            message=(
-                f"{len(matching_records):,} historical record(s) matched your filters, but none had a "
-                f"closing rank at or beyond {rank:,} in any year/round on file. Based on actual data, "
-                "this rank has not historically closed a seat under these filters — this is not a "
-                "guess, just what is (and isn't) in the database yet."
-            ),
+    if not eligible:
+        where = target_state or "the selected states"
+        msg = (
+            f"There are {len(matching):,} seat record(s) in {where} for these filters, but none that a "
+            f"student with your profile is eligible for."
         )
+        if home_state and target_state and home_state != target_state:
+            msg += (
+                f" As a {home_state} candidate you can only take {target_state} seats that are open to "
+                f"all-India candidates (usually private/management), and you compete there as General. "
+                f"Try adding the NRI or other seat types, or a different course."
+            )
+        return PredictionOutcome(len(matching), 0, [], msg, {})
 
-    seen: set[tuple] = set()
-    results: list[PredictionResult] = []
-    for round_result, record in hits:
-        dedup_key = (record.college_id, record.course_id, record.category_id)
-        if dedup_key in seen:
+    # 3) compare the rank with history; keep the best route per institute+course
+    best: dict[tuple, tuple] = {}
+    routes: dict[tuple, int] = {}
+    for r in eligible:
+        ev = _evaluate(rank, r)
+        if ev is None:
             continue
-        seen.add(dedup_key)
+        chance, margin_pct, ref, cleared, latest = ev
+        key = (r.state, r.institute, r.course)
+        routes[key] = routes.get(key, 0) + 1
+        score = (CHANCE_ORDER[chance], ROUTE_PREFERENCE.get(r.info.seat_type, 5), -margin_pct)
+        cur = best.get(key)
+        if cur is None or score < cur[0]:
+            best[key] = (score, r, chance, margin_pct, ref, cleared, latest)
 
-        chance, margin_pct = _chance_label(rank, round_result.close_rank)
+    if not best:
+        return PredictionOutcome(
+            len(matching), len(eligible), [],
+            f"You are eligible for {len(eligible):,} seat record(s) under these filters, but a rank of "
+            f"{rank:,} has not got any of them in the years/rounds on file. Try a different course, "
+            f"add more seat types, or widen the counselling state.",
+            {},
+        )
+
+    ordered = sorted(best.values(), key=lambda t: (t[0][0], t[4][3]))
+    summary = {"High Chance": 0, "Moderate Chance": 0, "Borderline": 0}
+    for t in ordered:
+        summary[t[2]] += 1
+
+    results: list[PredictionResult] = []
+    for score, r, chance, margin_pct, ref, cleared, latest in ordered[:limit]:
+        key = (r.state, r.institute, r.course)
+        info = r.info
         results.append(
             PredictionResult(
-                institute=record.college.name if record.college else "Unknown",
-                state=record.state.name if record.state else None,
-                authority=record.authority.name if record.authority else None,
-                course=record.course.name if record.course else None,
-                category=record.category.code if record.category else None,
-                quota=record.quota.name if record.quota else None,
-                seat_type=record.seat_type,
-                fee=record.fee,
-                year=round_result.year,
-                round=round_result.round_name,
-                open_rank=round_result.open_rank,
-                close_rank=round_result.close_rank,
+                institute=r.institute,
+                state=r.state,
+                authority=r.authority,
+                course=r.course,
+                category=r.category,
+                quota=info.quota_label,
+                seat_type=rules.SEAT_TYPE_LABELS.get(info.seat_type, info.seat_type),
+                fee=r.fee,
+                year=ref[0],
+                round=ref[1],
+                open_rank=ref[2],
+                close_rank=ref[3],
                 chance=chance,
                 margin_percent=margin_pct,
+                open_to_all_india=info.open_to_all_india,
+                category_group=info.category_group,
+                latest_year=latest[0][0],
+                latest_year_rounds={rn: c for (_y, rn, _o, c) in latest},
+                cleared_in=[f"{y} {rn}" for (y, rn, _c) in cleared],
+                other_routes=routes[key] - 1,
             )
         )
-        if len(results) >= limit:
-            break
 
-    return PredictionOutcome(total_matching_records=len(matching_records), results=results, message=None)
+    return PredictionOutcome(len(matching), len(eligible), results, None, summary)
