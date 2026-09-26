@@ -127,62 +127,81 @@
   }
 
   /**
-   * Quota list follows home state + counselling state: only quotas this
-   * student can actually take are offered, grouped by seat type.
+   * Quota list: every quota in the counselling state (or in every state when
+   * "All states" is chosen). Quotas reserved for another state's domicile
+   * candidates are still listed, marked "home-state only", so students can
+   * see everything that exists.
    */
+  let QUOTA_INFO = new Map(); // quota name -> { states:Set, locked:boolean }
+
   function refreshQuotas() {
     if (!OPTIONS || !OPTIONS.quotas_by_state) return;
     const home = form.homeState.value;
     const target = form.state.value;
-    const states = target ? [target] : Object.keys(OPTIONS.quotas_by_state);
-    const byName = new Map();
-    states.forEach((st) => {
-      (OPTIONS.quotas_by_state[st] || []).forEach((q) => {
-        if (home && st !== home && !q.all_india) return; // domicile-only seat in another state
-        if (!byName.has(q.name)) byName.set(q.name, { ...q, states: new Set() });
-        byName.get(q.name).states.add(st);
-      });
-    });
-
     const labels = {};
     (OPTIONS.seat_types || []).forEach((t) => (labels[t.id] = t.label));
-    const groups = new Map();
-    [...byName.values()]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .forEach((q) => {
+    const typeOrder = (OPTIONS.seat_types || []).map((t) => t.id);
+    const isLocked = (st, q) => !!home && st !== home && !q.all_india;
+    const optionHtml = (q, st) => {
+      const locked = isLocked(st, q);
+      const text = q.name + (locked ? " — home-state only" : "");
+      return `<option value="${escapeHtml(q.name)}">${escapeHtml(text)}</option>`;
+    };
+
+    QUOTA_INFO = new Map();
+    let html = '<option value="">All quotas</option>';
+
+    if (target) {
+      // One state: group by seat type
+      const list = OPTIONS.quotas_by_state[target] || [];
+      const groups = new Map();
+      list.forEach((q) => {
+        QUOTA_INFO.set(q.name, { states: new Set([target]), locked: isLocked(target, q) });
         if (!groups.has(q.seat_type)) groups.set(q.seat_type, []);
         groups.get(q.seat_type).push(q);
       });
+      typeOrder.filter((id) => groups.has(id)).forEach((id) => {
+        html += `<optgroup label="${escapeHtml(labels[id] || id)}">`;
+        groups.get(id).sort((a, b) => a.name.localeCompare(b.name)).forEach((q) => (html += optionHtml(q, target)));
+        html += "</optgroup>";
+      });
+    } else {
+      // All states: group by state, home state first
+      const states = Object.keys(OPTIONS.quotas_by_state).sort((a, b) =>
+        a === home ? -1 : b === home ? 1 : a.localeCompare(b)
+      );
+      states.forEach((st) => {
+        const list = [...(OPTIONS.quotas_by_state[st] || [])].sort(
+          (a, b) => typeOrder.indexOf(a.seat_type) - typeOrder.indexOf(b.seat_type) || a.name.localeCompare(b.name)
+        );
+        html += `<optgroup label="${escapeHtml(st)}${st === home ? " (your home state)" : ""}">`;
+        list.forEach((q) => {
+          const prev = QUOTA_INFO.get(q.name);
+          if (prev) { prev.states.add(st); prev.locked = prev.locked && isLocked(st, q); return; }
+          QUOTA_INFO.set(q.name, { states: new Set([st]), locked: isLocked(st, q) });
+          html += optionHtml(q, st);
+        });
+        html += "</optgroup>";
+      });
+    }
 
     const before = form.quota.value;
-    const order = (OPTIONS.seat_types || []).map((t) => t.id);
-    let html = '<option value="">All quotas I\'m eligible for</option>';
-    order.filter((id) => groups.has(id)).forEach((id) => {
-      html += `<optgroup label="${escapeHtml(labels[id] || id)}">`;
-      groups.get(id).forEach((q) => {
-        // Short codes like "MNG" / "NRI" don't say which state they belong to.
-        const st = [...q.states];
-        const needsState = !target && st.length === 1 && !q.name.toLowerCase().includes(st[0].toLowerCase().slice(0, 3));
-        const text = needsState ? `${q.name} (${st[0]})` : q.name;
-        html += `<option value="${escapeHtml(q.name)}">${escapeHtml(text)}</option>`;
-      });
-      html += "</optgroup>";
-    });
     form.quota.innerHTML = html;
-
-    if (before && byName.has(before)) {
-      form.quota.value = before;
-    } else if (before) {
-      form.quotaHint.textContent = `"${before}" isn't available for you here — showing all quotas.`;
-      return;
-    }
+    if (before && QUOTA_INFO.has(before)) form.quota.value = before;
     updateQuotaHint();
   }
 
   function updateQuotaHint() {
-    form.quotaHint.textContent = form.quota.value
-      ? "Only this quota is searched (seat-type options below are ignored)."
-      : "";
+    const q = form.quota.value;
+    form.quotaHint.textContent = "";
+    if (!q) return;
+    const info = QUOTA_INFO.get(q);
+    if (info && info.locked) {
+      const st = [...info.states].join(", ");
+      form.quotaHint.textContent = `${q} is only for ${st} domicile candidates, so a ${form.homeState.value} candidate won't get results here. Its cutoffs are still visible on the Colleges page.`;
+    } else {
+      form.quotaHint.textContent = "Only this quota is searched (seat-type options below are ignored).";
+    }
   }
 
   function updateEligibilityNote() {
