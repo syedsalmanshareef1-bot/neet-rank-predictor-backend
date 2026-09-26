@@ -29,6 +29,7 @@ that exists in the database.
 """
 from __future__ import annotations
 
+import re
 import threading
 from dataclasses import dataclass, field
 
@@ -37,6 +38,10 @@ from sqlalchemy.orm import Session, joinedload
 from app import models
 from app.schemas import PredictionFilters, PredictionResult
 from app.services import seat_rules as rules
+
+# Colleges that admit only women; the data has no flag for this, only the name.
+# ("Dist Women Hosp" = a hospital for women patients, open to all doctors.)
+WOMEN_ONLY_INSTITUTE = re.compile(r"(coll|college|univ).*\b(women|ladies)\b|\b(women|ladies)\b.*(coll|college|univ)|lady hardinge", re.I)
 
 CHANCE_ORDER = {"High Chance": 0, "Moderate Chance": 1, "Borderline": 2}
 # When one institute+course is reachable through several seats with the same
@@ -188,6 +193,10 @@ def predict(db: Session, rank: int, filters: PredictionFilters, limit: int = 500
     home_state = filters.home_state or None
     target_state = filters.state or None
     seat_types = set(filters.seat_types or rules.DEFAULT_SEAT_TYPES)
+    if filters.quota:
+        # Picking a specific quota (e.g. "NRI") is an explicit choice of seat
+        # type, so the seat-type checkboxes don't hide it.
+        seat_types = set(rules.SEAT_TYPE_LABELS)
     student_cat = (filters.student_category or "").lower() or None
     is_female = (filters.gender or "").lower() == "female"
 
@@ -221,7 +230,8 @@ def predict(db: Session, rank: int, filters: PredictionFilters, limit: int = 500
     if use_profile:
         eligible = [
             r for r in matching
-            if rules.student_can_take(
+            if (is_female or not WOMEN_ONLY_INSTITUTE.search(r.institute))
+            and rules.student_can_take(
                 r.info,
                 seat_state=r.state,
                 home_state=home_state,

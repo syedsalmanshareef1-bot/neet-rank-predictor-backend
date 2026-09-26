@@ -42,6 +42,8 @@
     homeState: document.getElementById("homeState"),
     homeStateError: document.getElementById("homeStateError"),
     state: document.getElementById("state"),
+    quota: document.getElementById("quota"),
+    quotaHint: document.getElementById("quotaHint"),
     studentCategory: document.getElementById("studentCategory"),
     gender: document.getElementById("gender"),
     isPwd: document.getElementById("isPwd"),
@@ -106,6 +108,7 @@
 
     [form.course, form.homeState, form.state].forEach((el) => (el.disabled = false));
     refreshCourses();
+    refreshQuotas();
     updateEligibilityNote();
   }
 
@@ -121,6 +124,65 @@
     } else {
       form.courseHint.textContent = "";
     }
+  }
+
+  /**
+   * Quota list follows home state + counselling state: only quotas this
+   * student can actually take are offered, grouped by seat type.
+   */
+  function refreshQuotas() {
+    if (!OPTIONS || !OPTIONS.quotas_by_state) return;
+    const home = form.homeState.value;
+    const target = form.state.value;
+    const states = target ? [target] : Object.keys(OPTIONS.quotas_by_state);
+    const byName = new Map();
+    states.forEach((st) => {
+      (OPTIONS.quotas_by_state[st] || []).forEach((q) => {
+        if (home && st !== home && !q.all_india) return; // domicile-only seat in another state
+        if (!byName.has(q.name)) byName.set(q.name, { ...q, states: new Set() });
+        byName.get(q.name).states.add(st);
+      });
+    });
+
+    const labels = {};
+    (OPTIONS.seat_types || []).forEach((t) => (labels[t.id] = t.label));
+    const groups = new Map();
+    [...byName.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach((q) => {
+        if (!groups.has(q.seat_type)) groups.set(q.seat_type, []);
+        groups.get(q.seat_type).push(q);
+      });
+
+    const before = form.quota.value;
+    const order = (OPTIONS.seat_types || []).map((t) => t.id);
+    let html = '<option value="">All quotas I\'m eligible for</option>';
+    order.filter((id) => groups.has(id)).forEach((id) => {
+      html += `<optgroup label="${escapeHtml(labels[id] || id)}">`;
+      groups.get(id).forEach((q) => {
+        // Short codes like "MNG" / "NRI" don't say which state they belong to.
+        const st = [...q.states];
+        const needsState = !target && st.length === 1 && !q.name.toLowerCase().includes(st[0].toLowerCase().slice(0, 3));
+        const text = needsState ? `${q.name} (${st[0]})` : q.name;
+        html += `<option value="${escapeHtml(q.name)}">${escapeHtml(text)}</option>`;
+      });
+      html += "</optgroup>";
+    });
+    form.quota.innerHTML = html;
+
+    if (before && byName.has(before)) {
+      form.quota.value = before;
+    } else if (before) {
+      form.quotaHint.textContent = `"${before}" isn't available for you here — showing all quotas.`;
+      return;
+    }
+    updateQuotaHint();
+  }
+
+  function updateQuotaHint() {
+    form.quotaHint.textContent = form.quota.value
+      ? "Only this quota is searched (seat-type options below are ignored)."
+      : "";
   }
 
   function updateEligibilityNote() {
@@ -140,11 +202,13 @@
     note.hidden = false;
   }
 
-  form.state.addEventListener("change", () => { refreshCourses(); updateEligibilityNote(); });
+  form.state.addEventListener("change", () => { refreshCourses(); refreshQuotas(); updateEligibilityNote(); });
+  form.quota.addEventListener("change", updateQuotaHint);
   form.homeState.addEventListener("change", () => {
     try { localStorage.setItem(HOME_STATE_KEY, form.homeState.value); } catch (e) { /* ignore */ }
     form.homeStateError.textContent = "";
     form.homeState.classList.remove("invalid");
+    refreshQuotas();
     updateEligibilityNote();
   });
 
@@ -171,6 +235,7 @@
       });
     }
     refreshCourses();
+    refreshQuotas();
     updateEligibilityNote();
   });
 
@@ -221,6 +286,7 @@
       home_state: form.homeState.value,
       state: form.state.value,
       course: form.course.value,
+      quota: form.quota.value,
       student_category: form.studentCategory.value,
       gender: form.gender.value,
       is_pwd: form.isPwd.checked,

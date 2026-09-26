@@ -77,7 +77,7 @@ class PredictionFilters(BaseModel):
 
     # Where to look. `state` is the counselling state (blank = every state the student is eligible for).
     exam: Optional[str] = None
-    state: Optional[str] = None
+    state: Optional[str] = None  # counselling state
     authority: Optional[str] = None
     course: Optional[str] = None
     category: Optional[str] = None
@@ -140,6 +140,8 @@ class PredictOptions(BaseModel):
     counselling_states: List[str]
     courses: List[str]
     courses_by_state: Dict[str, List[str]]
+    # quota name -> {seat_type, all_india}, per counselling state
+    quotas_by_state: Dict[str, List[Dict[str, Any]]] = {}
     student_categories: List[NamedItem]
     seat_types: List[Dict[str, Any]]
 

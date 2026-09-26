@@ -26,9 +26,15 @@ def predict_options(db: Session = Depends(get_db), user: models.AdminUser = Depe
     counselling state), student categories and seat types."""
     data = snapshot(db)
     by_state: dict[str, set[str]] = {}
+    quotas: dict[str, dict[str, dict]] = {}
     for r in data:
         if r.state and r.course:
             by_state.setdefault(r.state, set()).add(r.course)
+        if r.state:
+            q = quotas.setdefault(r.state, {}).setdefault(
+                r.info.quota_label, {"name": r.info.quota_label, "seat_type": r.info.seat_type, "all_india": False}
+            )
+            q["all_india"] = q["all_india"] or r.info.open_to_all_india
     all_courses = sorted({c for cs in by_state.values() for c in cs})
     home = sorted(set(ALL_STATES) | set(by_state))
     return PredictOptions(
@@ -36,6 +42,7 @@ def predict_options(db: Session = Depends(get_db), user: models.AdminUser = Depe
         counselling_states=sorted(by_state),
         courses=all_courses,
         courses_by_state={s: sorted(cs) for s, cs in by_state.items()},
+        quotas_by_state={s: sorted(qs.values(), key=lambda q: q["name"]) for s, qs in quotas.items()},
         student_categories=[
             NamedItem(id=i, name=c) for i, c in enumerate(rules.STUDENT_CATEGORIES, start=1)
         ],
